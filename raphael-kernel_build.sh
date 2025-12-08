@@ -4,9 +4,9 @@ wget -P arch/arm64/configs https://raw.githubusercontent.com/GengWei1997/kernel-
 make -j$(nproc) ARCH=arm64 LLVM=1 defconfig raphael.config
 make -j$(nproc) ARCH=arm64 LLVM=1
 _kernel_version="$(make kernelrelease -s)"
-mkdir ../linux-xiaomi-raphael/boot
+mkdir -p ../linux-xiaomi-raphael/boot/dtbs/qcom
 cp arch/arm64/boot/vmlinuz.efi ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_version
-cp arch/arm64/boot/dts/qcom/sm8150* ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
+cp arch/arm64/boot/dts/qcom/sm8150*.dtb ../linux-xiaomi-raphael/boot/dtbs/qcom
 cp .config ../linux-xiaomi-raphael/boot/config-$_kernel_version
 sed -i "s/Version:.*/Version: ${_kernel_version}/" ../linux-xiaomi-raphael/DEBIAN/control
 rm -rf ../linux-xiaomi-raphael/lib

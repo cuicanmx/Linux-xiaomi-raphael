@@ -103,7 +103,7 @@ mkdir -p boot_tmp
 wget https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
 mount -o loop xiaomi-k20pro-boot.img boot_tmp
 
-cp rootdir/boot/dtbs/qcom boot_tmp/dtbs/
+cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/
 cp rootdir/boot/config-* boot_tmp/
 cp rootdir/boot/initrd.img-* boot_tmp/initramfs
 cp rootdir/boot/vmlinuz-* boot_tmp/linux.efi
