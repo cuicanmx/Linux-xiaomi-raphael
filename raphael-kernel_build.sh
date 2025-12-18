@@ -1,8 +1,8 @@
 git clone https://github.com/GengWei1997/linux.git --branch raphael-$1 --depth 1 linux
 cd linux
 wget -P arch/arm64/configs https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/raphael.config
-make -j$(nproc) ARCH=arm64 LLVM=1 defconfig raphael.config
-make -j$(nproc) ARCH=arm64 LLVM=1
+make -j$(nproc) ARCH=arm64 defconfig raphael.config
+make -j$(nproc) ARCH=arm64 
 _kernel_version="$(make kernelrelease -s)"
 mkdir -p ../linux-xiaomi-raphael/boot/dtbs/qcom
 cp arch/arm64/boot/vmlinuz.efi ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_version
