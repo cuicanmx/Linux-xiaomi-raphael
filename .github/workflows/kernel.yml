@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         
       - name: Install Dependencies
-        run: sudo apt update && sudo apt install build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
+        run: sudo apt update && sudo apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
 
       - name: Cache ccache directory
         uses: actions/cache@v3
@@ -47,11 +47,11 @@ jobs:
           echo "compression_level = 6" >> ~/.ccache/ccache.conf
 
       - name: Build kernel with ccache
-        run: sudo sh raphael-kernel_build.sh ${{ matrix.version }}
+        run: sh raphael-kernel_build.sh ${{ matrix.version }}
         env:
-          CCACHE_DIR: ~/.ccache
-          CCACHE_MAXSIZE: 10G
-          PATH: /usr/lib/ccache:$PATH
+            CCACHE_DIR: ~/.ccache
+            CCACHE_MAXSIZE: 10G
+            PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
       - name: Cache build artifacts
         uses: actions/cache@v3
