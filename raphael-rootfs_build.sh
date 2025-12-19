@@ -91,6 +91,13 @@ fi
 # Install kernel packages
 chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb || true
 chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb || true
+
+# Install alsa package with dependency resolution
+if [ "$distro_type" = "debian" ]; then
+    chroot rootdir apt install -y alsa-ucm-conf
+elif [ "$distro_type" = "ubuntu" ]; then
+    chroot rootdir apt install -y alsa-ucm-conf || chroot rootdir apt install -y alsa-base
+fi
 chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb || true
 
 # Clean up kernel packages

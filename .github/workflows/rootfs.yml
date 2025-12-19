@@ -60,6 +60,14 @@ jobs:
       - name: List downloaded artifacts
         run: ls -la artifacts/
 
+      - name: Find and copy .7z files
+        run: |
+          # Find all .7z files in the artifact directories
+          find artifacts -name "*.7z" -type f -exec cp {} . \;
+          
+          # List the copied files
+          ls -la *.7z
+
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
         with:
@@ -80,6 +88,6 @@ jobs:
             - Optimized for Xiaomi Raphael device
             - Includes kernel ${{ matrix.kernel }} and necessary drivers
             - Root password: 1234
-          files: artifacts/*.7z
+          files: "*.7z"
           draft: false
           prerelease: false
