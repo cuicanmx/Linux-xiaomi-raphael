@@ -1,0 +1,64 @@
+# This is a workflow for building rootfs
+name: rootfs
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  rootfs:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-24.04-arm
+    strategy:
+            matrix:
+                desktop: [ubuntu-desktop]
+                kernel: [6.18]
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+
+      # Download kernel deb packages from the latest kernel workflow run
+      - name: Download Kernel DEB Packages
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          workflow: kernel.yml
+          name: xiaomi-raphael-debs_${{ matrix.kernel }}
+          path: xiaomi-raphael-debs_${{ matrix.kernel }}
+          branch: master
+
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod cpio binutils tar git wget libssl-dev
+
+      - name: Build rootfs
+        run: sudo sh raphael-rootfs_build.sh ${{ matrix.desktop }} ${{ matrix.kernel }}
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: rootfs-${{ matrix.desktop }}-${{ matrix.kernel }}-${{ github.sha }}
+          release_name: RootFS ${{ matrix.desktop }} ${{ matrix.kernel }} (${{ github.sha }})
+          draft: false
+          prerelease: false
+
+      - name: Upload rootfs to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/rootfs.7z
+          asset_name: rootfs-${{ matrix.desktop }}-${{ matrix.kernel }}.7z
+          asset_content_type: application/x-7z-compressed

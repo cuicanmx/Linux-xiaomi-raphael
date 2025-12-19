@@ -1,0 +1,89 @@
+# This is a workflow for building kernel
+name: kernel
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  kernel:
+    runs-on: ubuntu-24.04-arm
+    strategy:
+            matrix:
+                version: [6.18]
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+        
+      - name: Install Dependencies
+        run: sudo apt update && sudo apt install build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.version }}-${{ runner.os }}-kernel
+          max-size: 10G
+
+      - name: Build kernel
+        run: sudo sh raphael-kernel_build.sh ${{ matrix.version }}
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          PATH: /usr/lib/ccache:$PATH
+
+      - name: Upload deb packages
+        uses: actions/upload-artifact@v4.0.0
+        with:
+          # Artifact name
+          name: xiaomi-raphael-debs_${{ matrix.version }}
+          path: ${{ github.workspace }}/*.deb
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: kernel-${{ matrix.version }}-${{ github.sha }}
+          release_name: Kernel ${{ matrix.version }} (${{ github.sha }})
+          draft: false
+          prerelease: false
+
+      - name: Upload Kernel DEB to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/linux-xiaomi-raphael.deb
+          asset_name: linux-xiaomi-raphael-${{ matrix.version }}.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload Firmware DEB to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/firmware-xiaomi-raphael.deb
+          asset_name: firmware-xiaomi-raphael-${{ matrix.version }}.deb
+          asset_content_type: application/vnd.debian.binary-package
+
+      - name: Upload ALSA DEB to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/alsa-xiaomi-raphael.deb
+          asset_name: alsa-xiaomi-raphael-${{ matrix.version }}.deb
+          asset_content_type: application/vnd.debian.binary-package

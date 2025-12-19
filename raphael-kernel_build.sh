@@ -1,7 +1,7 @@
 git clone https://github.com/GengWei1997/linux.git --branch raphael-$1 --depth 1 linux
 cd linux
 make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- defconfig sm8150.config
-make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu-
+make -j$(nproc) ARCH=arm64 CROSS_COMPILE="ccache aarch64-linux-gnu-"
 _kernel_version="$(make kernelrelease -s)"
 mkdir ../linux-xiaomi-raphael/boot
 cp arch/arm64/boot/Image.gz ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_version

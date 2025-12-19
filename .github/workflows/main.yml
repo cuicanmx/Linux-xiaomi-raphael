@@ -17,7 +17,7 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   kernel:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     strategy:
             matrix:
                 version: [6.18]
@@ -42,7 +42,7 @@ jobs:
           
   rootfs:
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     needs: kernel
     strategy:
             matrix:
@@ -56,7 +56,7 @@ jobs:
         with:
           pattern: xiaomi-raphael-debs*
       - name: Install Dependencies
-        run: sudo apt update && sudo apt install unzip build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev clang llvm lld
+        run: sudo apt update && sudo apt install build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod cpio binutils tar git wget libssl-dev
 
       - name: Build rootfs
         run: sudo sh raphael-rootfs_build.sh ${{ matrix.desktop }} ${{ matrix.kernel }}
@@ -68,10 +68,3 @@ jobs:
           name: rootfs_${{ matrix.desktop }}_${{ matrix.kernel }}
           path: rootfs.7z
           compression-level: 0
-
-      - name: Upload boot image
-        uses: actions/upload-artifact@v4.0.0
-        with:
-          # Artifact name
-          name: boot_${{ matrix.desktop }}_${{ matrix.kernel }}
-          path: xiaomi-k20pro-boot.img
