@@ -34,7 +34,7 @@ jobs:
         run: sudo apt update && sudo apt install -y debootstrap 7zip kmod tar wget
 
       - name: Build rootfs
-        run: sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
+        run: sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
 
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
