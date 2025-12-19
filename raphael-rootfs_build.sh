@@ -46,13 +46,20 @@ chroot rootdir apt update
 chroot rootdir apt upgrade -y
 
 #u-boot-tools breaks grub installation
-chroot rootdir apt install -y bash-completion sudo apt-utils ssh openssh-server nano systemd-boot initramfs-tools chrony curl wget u-boot-tools-
+chroot rootdir apt install -y bash-completion sudo apt-utils ssh openssh-server nano initramfs-tools chrony curl wget u-boot-tools-
 
-#Device specific
-chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
+# Install systemd-boot only for Debian
+if [ "$distro_type" = "debian" ]; then
+    chroot rootdir apt install -y systemd-boot
+fi
 
-#Remove check for "*-laptop"
-sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
+#Device specific packages (install if available)
+chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv || true
+
+#Remove check for "*-laptop" if pd-mapper.service exists
+if [ -f "rootdir/lib/systemd/system/pd-mapper.service" ]; then
+    sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
+fi
 
 # Set root password to 1234
 echo 'root:1234' | chroot rootdir chpasswd
@@ -64,6 +71,7 @@ fi
 
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
+    chroot rootdir apt update
     if [ "$distro_type" = "debian" ]; then
         chroot rootdir apt install -y xfce4 xfce4-goodies lightdm
         chroot rootdir systemctl enable lightdm

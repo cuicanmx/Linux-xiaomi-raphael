@@ -57,6 +57,9 @@ jobs:
         with:
           path: artifacts
 
+      - name: List downloaded artifacts
+        run: ls -la artifacts/
+
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
         with:
