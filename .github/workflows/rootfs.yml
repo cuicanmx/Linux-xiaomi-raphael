@@ -31,7 +31,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Dependencies
-        run: sudo apt update && sudo apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod cpio binutils tar git wget libssl-dev
+        run: sudo apt update && sudo apt install -y debootstrap 7zip kmod tar wget
 
       - name: Build rootfs
         run: sudo sh raphael-rootfs_build.sh ${{ matrix.desktop }} ${{ matrix.kernel }}
