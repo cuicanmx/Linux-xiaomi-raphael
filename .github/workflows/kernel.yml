@@ -3,12 +3,6 @@ name: kernel
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
-
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
@@ -26,7 +20,7 @@ jobs:
       - uses: actions/checkout@v4
         
       - name: Install Dependencies
-        run: sudo apt update && sudo apt install build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
+        run: apt update && apt install build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -35,7 +29,7 @@ jobs:
           max-size: 10G
 
       - name: Build kernel
-        run: sudo sh raphael-kernel_build.sh ${{ matrix.version }}
+        run: sh raphael-kernel_build.sh ${{ matrix.version }}
         env:
           CCACHE_DIR: ${{ github.workspace }}/.ccache
           PATH: /usr/lib/ccache:$PATH
