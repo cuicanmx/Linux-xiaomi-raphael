@@ -46,15 +46,6 @@ jobs:
             CCACHE_MAXSIZE: 10G
             PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-
-
-      - name: Upload deb packages
-        uses: actions/upload-artifact@v4.0.0
-        with:
-          # Artifact name
-          name: xiaomi-raphael-debs_${{ matrix.version }}
-          path: ${{ github.workspace }}/*.deb
-
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: always()
