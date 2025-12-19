@@ -20,7 +20,11 @@ jobs:
       - uses: actions/checkout@v4
         
       - name: Install Dependencies
-        run: sudo apt update && sudo apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
+        run: |
+          echo "📦 安装内核编译依赖包"
+          sudo apt update
+          sudo apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
+          echo "✅ 依赖包安装完成"
 
       - name: Cache ccache directory
         uses: actions/cache@v3
@@ -34,18 +38,41 @@ jobs:
 
       - name: Setup ccache environment
         run: |
+          echo "⚙️  设置 ccache 编译缓存"
           mkdir -p ~/.ccache
           echo "max_size = 10.0G" > ~/.ccache/ccache.conf
           echo "compression = true" >> ~/.ccache/ccache.conf
           echo "compression_level = 6" >> ~/.ccache/ccache.conf
+          echo "📊 ccache 配置完成，缓存大小: 10GB"
 
       - name: Build kernel with ccache
-        run: sh raphael-kernel_build.sh ${{ matrix.version }}
+        run: |
+          echo "🔨 开始编译内核版本 ${{ matrix.version }}"
+          echo "💾 使用 ccache 加速编译"
+          sh raphael-kernel_build.sh ${{ matrix.version }}
+          echo "✅ 内核编译完成"
         env:
             CCACHE_DIR: ~/.ccache
             CCACHE_MAXSIZE: 10G
             PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
+      - name: List build artifacts
+        run: |
+          echo "📁 编译产物列表:"
+          ls -la *.deb || echo "⚠️  未找到 .deb 文件"
+          echo ""
+          echo "📊 文件大小统计:"
+          du -h *.deb 2>/dev/null || echo "暂无产物文件"
+
+      - name: Create Release
+        run: |
+          echo "🚀 准备创建内核 Release"
+          echo "🏷️  Release 标签: kernel-${{ matrix.version }}"
+          echo "📦 要上传的内核包:"
+          ls -la *.deb 2>/dev/null || echo "无内核包文件"
+          echo ""
+          echo "👨‍💻 开始创建内核 Release..."
+        
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: always()
@@ -61,6 +88,7 @@ jobs:
             - Optimized for Xiaomi Raphael device
             - Includes necessary drivers and firmware
             - Compatible with Ubuntu/Debian rootfs
+          files: "*.deb"
           draft: false
           prerelease: false
 

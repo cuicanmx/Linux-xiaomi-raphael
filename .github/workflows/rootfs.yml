@@ -36,11 +36,22 @@ jobs:
         run: sudo apt update && sudo apt install -y debootstrap 7zip kmod tar wget
 
       - name: Build rootfs
-        run: sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
+        run: |
+          echo "🚀 开始构建 ${{ matrix.distro }} 发行版，内核版本 ${{ matrix.kernel }}"
+          sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
+          echo "✅ ${{ matrix.distro }} 构建完成"
 
       - name: Rename rootfs file
-        run: mv rootfs.7z raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+        run: |
+          echo "📝 重命名 rootfs 文件"
+          mv rootfs.7z raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+          echo "📁 文件已重命名为: raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z"
 
+      - name: Upload rootfs artifact
+        run: |
+          echo "📤 上传构建产物"
+          ls -la raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+        
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@v4
         with:
@@ -58,16 +69,34 @@ jobs:
           path: artifacts
 
       - name: List downloaded artifacts
-        run: ls -la artifacts/
+        run: |
+          echo "📥 已下载的构建产物:"
+          ls -la artifacts/
+          echo ""
+          echo "🔍 检查产物目录结构:"
+          find artifacts -type f -name "*.7z" | head -10
 
       - name: Find and copy .7z files
         run: |
-          # Find all .7z files in the artifact directories
+          echo "🔎 查找 .7z 文件"
           find artifacts -name "*.7z" -type f -exec cp {} . \;
+          echo "✅ .7z 文件已复制到当前目录"
           
-          # List the copied files
+          echo "📁 当前目录下的文件:"
           ls -la *.7z
+          echo ""
+          echo "📊 文件统计:"
+          du -h *.7z
 
+      - name: Create and Upload RootFS Release
+        run: |
+          echo "🚀 准备创建 GitHub Release"
+          echo "🏷️  Release 标签: rootfs"
+          echo "📦 要上传的文件:"
+          ls -la *.7z
+          echo ""
+          echo "👩‍💼 开始创建 Release..."
+        
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
         with:
