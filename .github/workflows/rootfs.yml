@@ -31,10 +31,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Dependencies
-        run: apt update && apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod cpio binutils tar git wget libssl-dev
+        run: sudo apt update && sudo apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod cpio binutils tar git wget libssl-dev
 
       - name: Build rootfs
-        run: sh raphael-rootfs_build.sh ${{ matrix.desktop }} ${{ matrix.kernel }}
+        run: sudo sh raphael-rootfs_build.sh ${{ matrix.desktop }} ${{ matrix.kernel }}
 
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
