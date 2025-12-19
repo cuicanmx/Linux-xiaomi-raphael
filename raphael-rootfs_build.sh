@@ -6,18 +6,28 @@
 #   exit
 # fi
 
-# VERSION="noble"
-# UBUNTU_VERSION="24.04.3"
+# Parse distribution and version
+distro_type=$(echo $1 | cut -d'-' -f1)
+distro_variant=$(echo $1 | cut -d'-' -f2)
 
 truncate -s 6G rootfs.img
 mkfs.ext4 rootfs.img
 mkdir rootdir
 mount -o loop rootfs.img rootdir
 
-# wget https://cdimage.ubuntu.com/ubuntu-base/releases/$VERSION/release/ubuntu-base-$UBUNTU_VERSION-base-arm64.tar.gz
-# tar xzvf ubuntu-base-$UBUNTU_VERSION-base-arm64.tar.gz -C rootdir
-# #rm ubuntu-base-$UBUNTU_VERSION-base-arm64.tar.gz
-debootstrap --arch=arm64 trixie rootdir http://deb.debian.org/debian/
+# Choose base system based on distribution
+case "$distro_type" in
+    "debian")
+        debootstrap --arch=arm64 trixie rootdir http://deb.debian.org/debian/
+        ;;
+    "ubuntu")
+        debootstrap --arch=arm64 noble rootdir http://ports.ubuntu.com/ubuntu-ports/
+        ;;
+    *)
+        echo "Unsupported distribution: $distro_type"
+        exit 1
+        ;;
+esac
 mount --bind /dev rootdir/dev
 mount --bind /dev/pts rootdir/dev/pts
 mount --bind /proc rootdir/proc
@@ -43,6 +53,25 @@ chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
 
 #Remove check for "*-laptop"
 sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
+
+# Set root password to 1234
+echo 'root:1234' | chroot rootdir chpasswd
+
+# Enable SSH for server variants
+if [ "$distro_variant" = "server" ]; then
+    chroot rootdir systemctl enable ssh
+fi
+
+# Install desktop environment for desktop variants
+if [ "$distro_variant" = "desktop" ]; then
+    if [ "$distro_type" = "debian" ]; then
+        chroot rootdir apt install -y xfce4 xfce4-goodies lightdm
+        chroot rootdir systemctl enable lightdm
+    elif [ "$distro_type" = "ubuntu" ]; then
+        chroot rootdir apt install -y ubuntu-desktop-minimal lightdm
+        chroot rootdir systemctl enable lightdm
+    fi
+fi
 
 cp xiaomi-raphael-debs_$2/*-xiaomi-raphael.deb rootdir/tmp/
 chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb

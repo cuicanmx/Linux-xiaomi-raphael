@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04-arm
     strategy:
             matrix:
-                desktop: [ubuntu-desktop]
+                distro: [debian-server, debian-desktop, ubuntu-server, ubuntu-desktop]
                 kernel: [6.18]
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -34,23 +34,24 @@ jobs:
         run: sudo apt update && sudo apt install -y debootstrap 7zip kmod tar wget
 
       - name: Build rootfs
-        run: sudo sh raphael-rootfs_build.sh ${{ matrix.desktop }} ${{ matrix.kernel }}
+        run: sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
 
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
         if: always()
         with:
-          tag_name: rootfs-${{ matrix.desktop }}-${{ matrix.kernel }}
-          name: RootFS ${{ matrix.desktop }} ${{ matrix.kernel }}
+          tag_name: rootfs-${{ matrix.distro }}-${{ matrix.kernel }}
+          name: RootFS ${{ matrix.distro }} ${{ matrix.kernel }}
           body: |
-            RootFS for Xiaomi Raphael with ${{ matrix.desktop }} desktop and Kernel ${{ matrix.kernel }}
+            RootFS for Xiaomi Raphael with ${{ matrix.distro }} and Kernel ${{ matrix.kernel }}
             
             Built from commit: ${{ github.sha }}
             
             Features:
-            - Ubuntu ${{ matrix.desktop }} desktop environment
+            - ${{ matrix.distro }} environment
             - Optimized for Xiaomi Raphael device
             - Includes kernel ${{ matrix.kernel }} and necessary drivers
+            - Root password: 1234
           files: rootfs.7z
           draft: false
           prerelease: false
