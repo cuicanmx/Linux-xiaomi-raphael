@@ -24,8 +24,10 @@ jobs:
       # Download kernel deb packages from release with tag kernel-6.18
       - name: Download Kernel DEB Packages from Release
         run: |
+          mkdir -p xiaomi-raphael-debs_${{ matrix.kernel }}
           gh release download kernel-${{ matrix.kernel }} \
             --pattern "*.deb" \
+            --dir xiaomi-raphael-debs_${{ matrix.kernel }} \
             --repo ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

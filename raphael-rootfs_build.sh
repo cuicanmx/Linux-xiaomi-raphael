@@ -73,11 +73,20 @@ if [ "$distro_variant" = "desktop" ]; then
     fi
 fi
 
-cp xiaomi-raphael-debs_$2/*-xiaomi-raphael.deb rootdir/tmp/
-chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb
-chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb
-chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb
-rm rootdir/tmp/*-xiaomi-raphael.deb
+# Copy kernel packages to rootfs
+if [ -d "xiaomi-raphael-debs_$2" ]; then
+    cp xiaomi-raphael-debs_$2/*-xiaomi-raphael.deb rootdir/tmp/
+else
+    cp *-xiaomi-raphael.deb rootdir/tmp/
+fi
+
+# Install kernel packages
+chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb || true
+chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb || true
+chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb || true
+
+# Clean up kernel packages
+rm -f rootdir/tmp/*-xiaomi-raphael.deb
 chroot rootdir update-initramfs -c -k all
 chroot rootdir rm -rf /boot/dtbs/qcom/
 chroot rootdir bash -c "$(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/ghproxy-Update-kernel.sh)"
