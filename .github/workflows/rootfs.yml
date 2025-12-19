@@ -23,14 +23,12 @@ jobs:
 
       # Download kernel deb packages from release with tag kernel-6.18
       - name: Download Kernel DEB Packages from Release
-        uses: actions/download-release-asset@v1
-        with:
-          tag: kernel-${{ matrix.kernel }}
-          file: |
-            linux-xiaomi-raphael.deb
-            firmware-xiaomi-raphael.deb
-            alsa-xiaomi-raphael.deb
-          token: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download kernel-${{ matrix.kernel }} \
+            --pattern "*.deb" \
+            --repo ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Dependencies
         run: apt update && apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod cpio binutils tar git wget libssl-dev
