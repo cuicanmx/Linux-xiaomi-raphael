@@ -55,43 +55,12 @@ jobs:
           name: xiaomi-raphael-debs_${{ matrix.version }}
           path: ${{ github.workspace }}/*.deb
 
-      - name: Check if release exists
-        id: check_release
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { data: releases } = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            });
-            
-            const releaseName = `Kernel ${process.env.VERSION}`;
-            const existingRelease = releases.find(release => release.name === releaseName);
-            
-            core.setOutput('exists', !!existingRelease);
-            core.setOutput('release_id', existingRelease?.id);
-            core.setOutput('upload_url', existingRelease?.upload_url);
-        env:
-          VERSION: ${{ matrix.version }}
-
-      - name: Create or update release
-        id: create_release
-        uses: actions/create-release@v1
-        if: steps.check_release.outputs.exists == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: kernel-${{ matrix.version }}-${{ github.sha }}
-          release_name: Kernel ${{ matrix.version }} (${{ github.sha }})
-          draft: false
-          prerelease: false
-
-      - name: Upload Kernel DEB to Release
+      - name: Create Release
         uses: softprops/action-gh-release@v1
+        if: always()
         with:
-          files: linux-xiaomi-raphael.deb
-          tag_name: kernel-${{ matrix.version }}-${{ github.sha }}
-          name: linux-xiaomi-raphael-${{ matrix.version }}.deb
+          tag_name: kernel-${{ matrix.version }}
+          name: Kernel ${{ matrix.version }}
           body: |
             Kernel ${{ matrix.version }} for Xiaomi Raphael
             
@@ -101,25 +70,26 @@ jobs:
             - Optimized for Xiaomi Raphael device
             - Includes necessary drivers and firmware
             - Compatible with Ubuntu/Debian rootfs
+          draft: false
+          prerelease: false
 
-      - name: Upload Firmware DEB to Release
+      - name: Upload DEB Packages to Release
         uses: softprops/action-gh-release@v1
         with:
-          files: firmware-xiaomi-raphael.deb
-          tag_name: kernel-${{ matrix.version }}-${{ github.sha }}
-          name: firmware-xiaomi-raphael-${{ matrix.version }}.deb
+          files: |
+            linux-xiaomi-raphael.deb
+            firmware-xiaomi-raphael.deb
+            alsa-xiaomi-raphael.deb
+          tag_name: kernel-${{ matrix.version }}
+          name: Kernel ${{ matrix.version }}
           body: |
-            Firmware package for Xiaomi Raphael with Kernel ${{ matrix.version }}
+            Kernel ${{ matrix.version }} for Xiaomi Raphael
             
-            Includes device-specific firmware and drivers
-
-      - name: Upload ALSA DEB to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: alsa-xiaomi-raphael.deb
-          tag_name: kernel-${{ matrix.version }}-${{ github.sha }}
-          name: alsa-xiaomi-raphael-${{ matrix.version }}.deb
-          body: |
-            ALSA configuration for Xiaomi Raphael with Kernel ${{ matrix.version }}
+            Built from commit: ${{ github.sha }}
             
-            Audio configuration and drivers for the device
+            Features:
+            - Optimized for Xiaomi Raphael device
+            - Includes necessary drivers and firmware
+            - Compatible with Ubuntu/Debian rootfs
+          draft: false
+          prerelease: false
