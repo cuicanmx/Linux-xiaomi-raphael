@@ -32,13 +32,6 @@ jobs:
             kernel-ccache-${{ matrix.version }}-${{ runner.os }}
             kernel-ccache-${{ matrix.version }}
 
-      - name: Cache Linux source code
-        uses: actions/cache@v3
-        id: cache-linux
-        with:
-          path: linux
-          key: linux-source-${{ matrix.version }}-${{ github.sha }}
-
       - name: Setup ccache environment
         run: |
           mkdir -p ~/.ccache
@@ -53,14 +46,7 @@ jobs:
             CCACHE_MAXSIZE: 10G
             PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-      - name: Cache build artifacts
-        uses: actions/cache@v3
-        id: cache-artifacts
-        with:
-          path: |
-            *.deb
-            ~/.ccache
-          key: kernel-artifacts-${{ matrix.version }}-${{ github.sha }}
+
 
       - name: Upload deb packages
         uses: actions/upload-artifact@v4.0.0
