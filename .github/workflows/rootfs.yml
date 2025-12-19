@@ -36,22 +36,45 @@ jobs:
       - name: Build rootfs
         run: sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
 
+      - name: Rename rootfs file
+        run: mv rootfs.7z raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+
+      - name: Upload rootfs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+          path: raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+          retention-days: 1
+
+  create-release:
+    needs: rootfs
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Download all rootfs artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
       - name: Create and Upload RootFS Release
         uses: softprops/action-gh-release@v1
-        if: always()
         with:
-          tag_name: rootfs-${{ matrix.distro }}-${{ matrix.kernel }}
-          name: RootFS ${{ matrix.distro }} ${{ matrix.kernel }}
+          tag_name: rootfs
+          name: RootFS Build ${{ github.sha }}
           body: |
-            RootFS for Xiaomi Raphael with ${{ matrix.distro }} and Kernel ${{ matrix.kernel }}
+            RootFS for Xiaomi Raphael with multiple distributions and Kernel ${{ matrix.kernel }}
             
             Built from commit: ${{ github.sha }}
             
+            Available distributions:
+            - debian-server
+            - debian-desktop (Xfce)
+            - ubuntu-server
+            - ubuntu-desktop
+            
             Features:
-            - ${{ matrix.distro }} environment
             - Optimized for Xiaomi Raphael device
             - Includes kernel ${{ matrix.kernel }} and necessary drivers
             - Root password: 1234
-          files: rootfs.7z
+          files: artifacts/*.7z
           draft: false
           prerelease: false
