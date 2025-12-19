@@ -1,10 +1,10 @@
 #!/bin/sh
 
-if [ "$(id -u)" -ne 0 ]
-then
-  echo "rootfs can only be built as root"
-  exit
-fi
+# if [ "$(id -u)" -ne 0 ]
+# then
+#   echo "rootfs can only be built as root"
+#   exit
+# fi
 
 # VERSION="noble"
 # UBUNTU_VERSION="24.04.3"
@@ -36,7 +36,7 @@ chroot rootdir apt update
 chroot rootdir apt upgrade -y
 
 #u-boot-tools breaks grub installation
-chroot rootdir apt install -y bash-completion sudo apt-utils ssh openssh-server nano systemd-boot initramfs-tools chrony curl wget u-boot-tools- ubuntu-minimal ubuntu-standard
+chroot rootdir apt install -y bash-completion sudo apt-utils ssh openssh-server nano systemd-boot initramfs-tools chrony curl wget u-boot-tools-
 
 #Device specific
 chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
@@ -50,6 +50,8 @@ chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb
 chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb
 rm rootdir/tmp/*-xiaomi-raphael.deb
 chroot rootdir update-initramfs -c -k all
+chroot rootdir rm -rf /boot/dtbs/qcom/
+chroot rootdir bash -c "$(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/ghproxy-Update-kernel.sh)"
 
 #create fstab!
 echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
