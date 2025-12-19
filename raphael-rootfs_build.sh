@@ -73,11 +73,11 @@ fi
 if [ "$distro_variant" = "desktop" ]; then
     chroot rootdir apt update
     if [ "$distro_type" = "debian" ]; then
-        chroot rootdir apt install -y xfce4 xfce4-goodies lightdm
-        chroot rootdir systemctl enable lightdm
+        chroot rootdir apt install -y xfce4 xfce4-goodies
+        echo "✅ Xfce桌面环境安装完成 (Debian)"
     elif [ "$distro_type" = "ubuntu" ]; then
-        chroot rootdir apt install -y ubuntu-desktop-minimal lightdm
-        chroot rootdir systemctl enable lightdm
+        chroot rootdir apt install -y ubuntu-desktop-minimal
+        echo "✅ Ubuntu桌面环境安装完成"
     fi
 fi
 
