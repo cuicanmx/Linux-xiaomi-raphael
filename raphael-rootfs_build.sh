@@ -287,10 +287,9 @@ EOF
         echo "🎨 安装Ubuntu桌面环境..."
         if chroot rootdir apt install -qq -y ubuntu-desktop; then
             echo "✅ Ubuntu桌面环境安装完成"
-            # 创建GDM目录（仅Ubuntu使用GDM）
-            echo "🔧 配置GDM显示管理器..."
             mkdir -p rootdir/var/lib/gdm
             touch rootdir/var/lib/gdm/run-initial-setup
+            echo "✅ GDM初始配置完成"
         else
             echo "❌ Ubuntu桌面环境安装失败"
             exit 1
