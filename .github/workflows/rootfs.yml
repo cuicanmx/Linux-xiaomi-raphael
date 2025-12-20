@@ -191,8 +191,10 @@ jobs:
         RELEASE_DIR="./release-assets"
         mkdir -p "$RELEASE_DIR"
         
-        # 查找并移动所有.7z和.img文件
-        find ./artifacts -name "*.7z" -o -name "*.img" -type f -exec mv {} "$RELEASE_DIR/" \;
+
+        
+        # 查找并移动所有.7z和.img文件 - 递归查找所有子目录并正确分组条件
+        find ./artifacts -type f -depth \( -name "*.7z" -o -name "*.img" \) -exec mv {} "$RELEASE_DIR/" \;
         
         # 生成文件列表
         echo "### 📦 包含的镜像文件" > "$RELEASE_DIR/filelist.md"

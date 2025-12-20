@@ -415,7 +415,7 @@ echo "检查目录下文件..."
 ls 
 # Create 7z archive
 echo "🗜️ 创建压缩包..."
-output_file="raphael-${distro_type}-${distro_variant}-$2.7z"
+output_file="${distro_type}-${distro_variant}-kernel-$2.7z"
 if 7z a "${output_file}" rootfs.img; then
     echo "✅ 压缩包创建成功: ${output_file}"
     echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
