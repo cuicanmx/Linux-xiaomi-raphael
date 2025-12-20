@@ -265,7 +265,7 @@ if [ "$distro_variant" = "desktop" ]; then
     if [ "$distro_type" = "debian" ]; then
         echo "🎨 安装Xfce桌面环境..."
         # 安装完整的Xfce组件，包括会话管理、面板、窗口管理器等
-        if chroot rootdir apt install -qq -y xfce4 xfce4-goodies xfce4-session xfce4-panel xfwm4 xfdesktop4 lightdm xorg xserver-xorg-input-all xserver-xorg-video-all libgl1-mesa-glx libgl1-mesa-dri policykit-1 dbus-x11; then
+        if chroot rootdir apt install -qq -y xfce4 xfce4-goodies xfce4-session xfce4-panel xfwm4 xfdesktop4 lightdm xorg xserver-xorg-input-all xserver-xorg-video-all libgl1 libgl1-mesa-dri polkit dbus-x11; then
             echo "✅ Xfce桌面环境和LightDM显示管理器安装完成 (Debian)"
             
             # 配置LightDM默认会话为Xfce
