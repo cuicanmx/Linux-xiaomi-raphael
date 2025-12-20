@@ -108,10 +108,10 @@ fi
 
 # Mount proc, sys, dev
 echo "🔗 挂载虚拟文件系统..."
-sudo mount --bind /dev rootdir/dev
-sudo mount --bind /dev/pts rootdir/dev/pts
-sudo mount --bind /proc rootdir/proc
-sudo mount --bind /sys rootdir/sys
+mount --bind /dev rootdir/dev
+mount --bind /dev/pts rootdir/dev/pts
+mount --bind /proc rootdir/proc
+mount --bind /sys rootdir/sys
 echo "✅ 虚拟文件系统挂载完成"
 
 # Install base packages
@@ -196,10 +196,11 @@ fi
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
-sudo umount -lf rootdir/sys > /dev/null 2>&1 || true
-sudo umount -lf rootdir/proc > /dev/null 2>&1 || true
-sudo umount -lf rootdir/dev/pts > /dev/null 2>&1 || true
-sudo umount -lf rootdir/dev > /dev/null 2>&1 || true
+umount rootdir/sys
+umount rootdir/proc
+umount rootdir/dev/pts
+umount rootdir/dev
+umount rootdir
 echo "✅ 虚拟文件系统卸载完成"
 
 # Create 7z archive
