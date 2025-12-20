@@ -124,7 +124,7 @@ else
 fi
 
 echo "🔧 安装系统工具包..."
-if chroot rootdir apt install -y systemd systemd-sysv init udev dbus; then
+if chroot rootdir apt install -y systemd systemd-sysv init udev dbus alsa-ucm-conf; then
     echo "✅ 系统工具包安装完成"
 else
     echo "❌ 系统工具包安装失败"
