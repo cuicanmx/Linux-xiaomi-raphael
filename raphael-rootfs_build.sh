@@ -24,25 +24,42 @@ echo "  内核: $2"
 
 # Check required kernel packages
 echo "📦 检查内核包文件..."
-kernel_packages=("linux-xiaomi-raphael_$2*.deb" "firmware-xiaomi-raphael_$2*.deb" "alsa-xiaomi-raphael_$2*.deb")
-missing_packages=()
+# 使用兼容的shell语法检查包文件
+found_packages=0
+missing_packages=""
 
-for pkg in "${kernel_packages[@]}"; do
-    if ls $pkg 1> /dev/null 2>&1; then
-        echo "✅ 找到: $pkg"
-    else
-        missing_packages+=("$pkg")
-        echo "❌ 未找到: $pkg"
-    fi
-done
+# 检查每个包文件
+if ls linux-xiaomi-raphael_$2*.deb 1> /dev/null 2>&1; then
+    echo "✅ 找到: linux-xiaomi-raphael_$2*.deb"
+    found_packages=$((found_packages + 1))
+else
+    missing_packages="linux-xiaomi-raphael_$2*.deb $missing_packages"
+    echo "❌ 未找到: linux-xiaomi-raphael_$2*.deb"
+fi
 
-if [ ${#missing_packages[@]} -gt 0 ]; then
-    echo "❌ 错误: 缺少必需的内核包: ${missing_packages[*]}"
+if ls firmware-xiaomi-raphael_$2*.deb 1> /dev/null 2>&1; then
+    echo "✅ 找到: firmware-xiaomi-raphael_$2*.deb"
+    found_packages=$((found_packages + 1))
+else
+    missing_packages="firmware-xiaomi-raphael_$2*.deb $missing_packages"
+    echo "❌ 未找到: firmware-xiaomi-raphael_$2*.deb"
+fi
+
+if ls alsa-xiaomi-raphael_$2*.deb 1> /dev/null 2>&1; then
+    echo "✅ 找到: alsa-xiaomi-raphael_$2*.deb"
+    found_packages=$((found_packages + 1))
+else
+    missing_packages="alsa-xiaomi-raphael_$2*.deb $missing_packages"
+    echo "❌ 未找到: alsa-xiaomi-raphael_$2*.deb"
+fi
+
+if [ $found_packages -lt 3 ]; then
+    echo "❌ 错误: 缺少必需的内核包: $missing_packages"
     echo "💡 请确保在工作流中正确下载了内核包"
     exit 1
 fi
 
-echo "✅ 所有必需的内核包已就绪"
+echo "✅ 所有必需的内核包已就绪 ($found_packages/3)"
 
 # Clean up old rootfs
 echo "🧹 清理旧的rootfs目录..."
