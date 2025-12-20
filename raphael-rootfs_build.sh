@@ -2,20 +2,29 @@
 
 set -e
 
-# 导入统一日志库
-. ./logging.sh
-
 # 设置脚本参数数量
 SCRIPT_ARG_COUNT=$#
 
 # 检查参数
-check_arguments 2 "$0 <发行版类型-变体> <内核版本>" "$0 debian-server 6.18"
+if [ $SCRIPT_ARG_COUNT -lt 2 ]; then
+    echo "错误: 参数数量不足，期望 2 个参数"
+    echo "用法: $0 <发行版类型-变体> <内核版本>"
+    echo "示例: $0 debian-server 6.18"
+    exit 1
+fi
 
 # 检查root权限
-check_root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "错误: 需要root权限运行此脚本"
+    exit 1
+fi
 
-log_header "开始构建 $1 发行版，内核版本 $2"
-log_info "参数检查: distro=$1, kernel=$2"
+echo ""
+echo "=========================================="
+echo "开始构建 $1 发行版，内核版本 $2"
+echo "=========================================="
+echo ""
+echo "参数检查: distro=$1, kernel=$2"
 
 # 解析发行版信息
 distro_type=$(echo "$1" | cut -d'-' -f1)
@@ -27,59 +36,59 @@ if [ "$distro_type" = "debian" ]; then
 elif [ "$distro_type" = "ubuntu" ]; then
     distro_version="noble"   # Ubuntu 24.04 (noble)
 else
-    log_error "错误: 不支持的发行版类型: $distro_type"
+    echo "错误: 不支持的发行版类型: $distro_type"
     exit 1
 fi
 
-log_info "解析发行版信息:"
-log_info "  类型: $distro_type"
-log_info "  变体: $distro_variant"
-log_info "  版本: $distro_version (默认)"
-log_info "  内核: $2"
+echo "解析发行版信息:"
+echo "  类型: $distro_type"
+echo "  变体: $distro_variant"
+echo "  版本: $distro_version (默认)"
+echo "  内核: $2"
 
 # 检查必需的内核包
-log_package "检查内核包文件..."
+echo "检查内核包文件..."
 # 使用兼容的shell语法检查包文件
 found_packages=0
 missing_packages=""
 
 # 检查每个包文件（使用不带版本号的文件名）
 if ls linux-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    log_success "找到: linux-xiaomi-raphael*.deb"
+    echo "找到: linux-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
     missing_packages="linux-xiaomi-raphael*.deb $missing_packages"
-    log_error "未找到: linux-xiaomi-raphael*.deb"
+    echo "未找到: linux-xiaomi-raphael*.deb"
 fi
 
 if ls firmware-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    log_success "找到: firmware-xiaomi-raphael*.deb"
+    echo "找到: firmware-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
     missing_packages="firmware-xiaomi-raphael*.deb $missing_packages"
-    log_error "未找到: firmware-xiaomi-raphael*.deb"
+    echo "未找到: firmware-xiaomi-raphael*.deb"
 fi
 
 if ls alsa-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    log_success "找到: alsa-xiaomi-raphael*.deb"
+    echo "找到: alsa-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
     missing_packages="alsa-xiaomi-raphael*.deb $missing_packages"
-    log_error "未找到: alsa-xiaomi-raphael*.deb"
+    echo "未找到: alsa-xiaomi-raphael*.deb"
 fi
 
 if [ $found_packages -lt 3 ]; then
-    log_error "错误: 缺少必需的内核包: $missing_packages"
-    log_info "请确保在工作流中正确下载了内核包"
-    log_file "当前目录文件列表:"
-    ls -la *.deb 2>/dev/null || log_info "  没有找到 .deb 文件"
+    echo "错误: 缺少必需的内核包: $missing_packages"
+    echo "请确保在工作流中正确下载了内核包"
+    echo "当前目录文件列表:"
+    ls -la *.deb 2>/dev/null || echo "  没有找到 .deb 文件"
     exit 1
 fi
 
-log_success "所有必需的内核包已就绪 ($found_packages/3)"
+echo "所有必需的内核包已就绪 ($found_packages/3)"
 
 # 清理旧的rootfs和镜像文件
-log_file "清理旧的rootfs和镜像文件..."
+echo "清理旧的rootfs和镜像文件..."
 if [ -d "rootdir" ]; then
     umount rootdir/sys 2>/dev/null || true
     umount rootdir/proc 2>/dev/null || true
@@ -87,25 +96,25 @@ if [ -d "rootdir" ]; then
     umount rootdir/dev 2>/dev/null || true
     umount rootdir 2>/dev/null || true
     rm -rf rootdir
-    log_success "旧目录已清理"
+    echo "旧目录已清理"
 fi
 
 if [ -f "rootfs.img" ]; then
     rm -f rootfs.img
-    log_success "旧镜像文件已清理"
+    echo "旧镜像文件已清理"
 fi
 
 # Create and mount image file
-echo "📁 创建IMG镜像文件..."
+echo "创建IMG镜像文件..."
 truncate -s 6G rootfs.img
 mkfs.ext4 rootfs.img
 mkdir -p rootdir
 mount -o loop rootfs.img rootdir
-echo "✅ 6GB镜像文件创建并挂载完成"
+echo "6GB镜像文件创建并挂载完成"
 
 # Bootstrap the rootfs
-echo "🌱 开始引导系统 (debootstrap)..."
-echo "📥 下载: $distro_type $distro_version"
+echo "开始引导系统 (debootstrap)..."
+echo "下载: $distro_type $distro_version"
 
 # Set mirror based on distribution type
 if [ "$distro_type" = "debian" ]; then
@@ -114,7 +123,7 @@ elif [ "$distro_type" = "ubuntu" ]; then
     mirror="http://ports.ubuntu.com/ubuntu-ports/"
 fi
 
-echo "🔗 使用镜像源: $mirror"
+echo "使用镜像源: $mirror"
 
 if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
     echo "✅ 系统引导完成"
@@ -125,12 +134,13 @@ else
 fi
 
 # Mount proc, sys, dev
-echo "🔗 挂载虚拟文件系统..."
+echo "挂载虚拟文件系统..."
 mount --bind /dev rootdir/dev
 mount --bind /dev/pts rootdir/dev/pts
-mount --bind /proc rootdir/proc
-mount --bind /sys rootdir/sys
-echo "✅ 虚拟文件系统挂载完成"
+mount -t proc proc rootdir/proc
+mount -t sysfs sys rootdir/sys
+
+echo "虚拟文件系统挂载完成"
 
 # Install base packages
 echo "📦 安装基础系统包..."
