@@ -246,7 +246,9 @@ echo "✅ 虚拟文件系统卸载完成"
 # Clean up directory
 rm -d rootdir
 echo "✅ 临时目录清理完成"
-
+echo "🔧 调整文件系统UUID..."
+tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img
+echo "✅ 文件系统UUID调整完成"
 # Create 7z archive
 echo "🗜️ 创建压缩包..."
 output_file="raphael-${distro_type}-${distro_variant}-$2.7z"
