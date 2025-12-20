@@ -322,36 +322,8 @@ EOF
             echo "❌ LightDM显示管理器启用失败"
             exit 1
         fi
-    elif [ "$distro_type" = "ubuntu" ]; then
-        # 明确启用GDM3服务，确保服务正常运行
-        if chroot rootdir systemctl enable gdm3.service; then
-            echo "✅ GDM3显示管理器已启用"
-            # 添加调试信息：检查GDM3服务状态
-            if chroot rootdir systemctl is-enabled gdm3.service >/dev/null; then
-                echo "🔍 GDM3服务已启用"
-            else
-                echo "🔍 GDM3服务未启用"
-            fi
-        else
-            echo "❌ GDM3显示管理器启用失败"
-            exit 1
-        fi
     fi
-    
-    # 安装必要的图形驱动和组件
-    echo "🔧 安装必要的图形组件..."
-    if chroot rootdir apt install -qq -y xserver-xorg x11-xserver-utils; then
-        echo "✅ 图形组件安装完成"
-        # 添加调试信息：检查关键图形组件是否安装
-        if chroot rootdir dpkg -l | grep -q xserver-xorg; then
-            echo "🔍 xserver-xorg已安装"
-        else
-            echo "🔍 xserver-xorg未安装"
-        fi
-    else
-        echo "❌ 图形组件安装失败"
-        exit 1
-    fi
+    # 安装ubuntu-desktop元包已包含所有必要的图形组件和服务配置
     
     # 创建普通用户（用于桌面登录）
     echo "👤 创建普通用户..."
