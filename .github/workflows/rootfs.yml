@@ -120,7 +120,7 @@ jobs:
         sudo ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
         # 检查构建结果 - 查找动态生成的压缩包
-        OUTPUT_FILE="raphael-${DISTRO}-${KERNEL_VER}.7z"
+        OUTPUT_FILE="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"
         if [ -f "$OUTPUT_FILE" ]; then
           FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
           echo "✅ RootFS 构建成功！"
