@@ -9,6 +9,8 @@ log_header "小米 Raphael 内核编译脚本"
 log_with_time "$LOG_LEVEL_INFO" "$LOG_TYPE_START" "开始时间: $(date)"
 
 # 检查参数
+# 设置全局变量$SCRIPT_ARG_COUNT来传递脚本的参数数量
+SCRIPT_ARG_COUNT=$#
 check_arguments 1 "$0 <内核版本>" "$0 6.18"
 
 KERNEL_VERSION="$1"
