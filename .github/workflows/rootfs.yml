@@ -147,7 +147,6 @@ jobs:
         name: ${{ matrix.distro }}-${{ steps.kernel_version.outputs.kernel_version }}
         path: |
           ${{ matrix.distro }}-kernel-*.7z
-          *.img
         retention-days: 14
         if-no-files-found: error
         compression-level: 0  # 文件已压缩，跳过二次压缩
