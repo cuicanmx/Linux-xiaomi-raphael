@@ -170,10 +170,8 @@ jobs:
     needs: build-rootfs
     runs-on: ubuntu-24.04-arm
     # 触发条件：手动触发且不跳过发布，并且构建成功
-    if: |
-      github.event_name == 'workflow_dispatch' &&
-      (github.event.inputs.skip_release == false || github.event.inputs.skip_release == null) &&
-      needs.build-rootfs.result == 'success'
+    if: always()
+
     
     steps:
     - name: "📥 下载所有构建产物"
