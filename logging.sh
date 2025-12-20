@@ -128,8 +128,8 @@ check_arguments() {
     local usage="$2"
     local example="$3"
     
-    # 检查脚本参数数量（不包括函数本身的3个参数）
-    local script_args_count=$(( $# - 3 ))
+    # 检查脚本参数数量（使用全局的$#，不包括函数本身的参数）
+    local script_args_count=$#
     if [ $script_args_count -ne $expected_count ]; then
         log_error "参数错误: 需要 $expected_count 个参数，但提供了 $script_args_count 个"
         log_info "用法: $usage"
