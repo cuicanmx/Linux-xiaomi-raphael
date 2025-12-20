@@ -119,9 +119,8 @@ jobs:
         echo "执行构建命令: sudo ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
         sudo ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
-        # 检查构建结果 - 查找生成的压缩包
-        # 注意：根据你的构建脚本，产物名称为 rootfs.7z
-        OUTPUT_FILE="rootfs.7z"
+        # 检查构建结果 - 查找动态生成的压缩包
+        OUTPUT_FILE="raphael-${DISTRO}-${KERNEL_VER}.7z"
         if [ -f "$OUTPUT_FILE" ]; then
           FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
           echo "✅ RootFS 构建成功！"
