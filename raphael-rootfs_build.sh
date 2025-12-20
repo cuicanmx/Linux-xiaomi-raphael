@@ -185,6 +185,19 @@ fi
 
 echo "✅ 所有设备特定包安装完成"
 
+# 配置自动DHCP网络
+echo "🌐 配置 systemd-networkd 自动DHCP..."
+cat > rootdir/etc/systemd/network/20-eth0.network << EOF
+[Match]
+Name=eth0
+
+[Network]
+DHCP=yes
+EOF
+# 启用服务
+chroot rootdir systemctl enable systemd-networkd
+echo "✅ 自动DHCP网络配置完成。"
+
 # Create fstab
 echo "📋 创建文件系统表..."
 echo "PARTLABEL=linux / ext4 errors=remount-ro,x-systemd.growfs 0 1
