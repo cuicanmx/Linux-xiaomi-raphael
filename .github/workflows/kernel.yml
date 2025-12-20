@@ -102,7 +102,8 @@ jobs:
           body: |
             ## 内核版本 ${{ github.event.inputs.kernel_version || '6.18' }}
             
-            📅 构建时间: ${{ fromJSON(github.event).inputs.kernel_version || '6.18' }}
+            📅 构建时间: ${{ github.event.created_at }}
+            🔖 内核版本: ${{ github.event.inputs.kernel_version || '6.18' }}
             
             ⚙️ 包含以下包:
             - linux-xiaomi-raphael_*.deb
