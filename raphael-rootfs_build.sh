@@ -243,9 +243,7 @@ echo "📋 创建文件系统表..."
 echo "PARTLABEL=linux / ext4 errors=remount-ro,x-systemd.growfs 0 1
 PARTLABEL=esp /boot/efi vfat umask=0077 0 1" | tee rootdir/etc/fstab
 
-# Create GDM directory
-mkdir -p rootdir/var/lib/gdm
-touch rootdir/var/lib/gdm/run-initial-setup
+
 
 # Clean package cache
 echo "🧹 清理软件包缓存..."
@@ -262,10 +260,21 @@ echo "✅ 网络和主机名配置完成"
 if [ "$distro_variant" = "desktop" ]; then
     echo "🖥️ 安装桌面环境..."
     chroot rootdir apt -qq update
+    
     if [ "$distro_type" = "debian" ]; then
         echo "🎨 安装Xfce桌面环境..."
-        if chroot rootdir apt install -qq -y xfce4 xfce4-goodies; then
-            echo "✅ Xfce桌面环境安装完成 (Debian)"
+        # 安装完整的Xfce组件，包括会话管理、面板、窗口管理器等
+        if chroot rootdir apt install -qq -y xfce4 xfce4-goodies xfce4-session xfce4-panel xfwm4 xfdesktop4 lightdm xorg xserver-xorg-input-all xserver-xorg-video-all libgl1-mesa-glx libgl1-mesa-dri policykit-1 dbus-x11; then
+            echo "✅ Xfce桌面环境和LightDM显示管理器安装完成 (Debian)"
+            
+            # 配置LightDM默认会话为Xfce
+            echo "🔧 配置LightDM默认会话为Xfce..."
+            mkdir -p rootdir/etc/lightdm
+            cat > rootdir/etc/lightdm/lightdm.conf << EOF
+[Seat:*]
+user-session=xfce
+EOF
+            echo "✅ LightDM默认会话配置完成"
         else
             echo "❌ Xfce桌面环境安装失败"
             exit 1
@@ -274,11 +283,153 @@ if [ "$distro_variant" = "desktop" ]; then
         echo "🎨 安装Ubuntu桌面环境..."
         if chroot rootdir apt install -qq -y ubuntu-desktop; then
             echo "✅ Ubuntu桌面环境安装完成"
+            # 创建GDM目录（仅Ubuntu使用GDM）
+            echo "🔧 配置GDM显示管理器..."
+            mkdir -p rootdir/var/lib/gdm
+            touch rootdir/var/lib/gdm/run-initial-setup
         else
             echo "❌ Ubuntu桌面环境安装失败"
             exit 1
         fi
     fi
+    
+    # 配置系统默认启动图形界面
+    echo "🔧 配置系统默认启动图形界面..."
+    if chroot rootdir systemctl set-default graphical.target; then
+        echo "✅ 已设置默认启动目标为 graphical.target"
+        # 添加调试信息：检查当前默认目标
+        current_target=$(chroot rootdir systemctl get-default)
+        echo "🔍 当前默认启动目标: $current_target"
+    else
+        echo "❌ 设置默认启动目标失败"
+        exit 1
+    fi
+    
+    # 启用显示管理器服务
+    if [ "$distro_type" = "debian" ]; then
+        if chroot rootdir systemctl enable lightdm.service; then
+            echo "✅ LightDM显示管理器已启用"
+            # 添加调试信息：检查LightDM服务状态
+            if chroot rootdir systemctl is-enabled lightdm.service >/dev/null; then
+                echo "🔍 LightDM服务已启用"
+            else
+                echo "🔍 LightDM服务未启用"
+            fi
+        else
+            echo "❌ LightDM显示管理器启用失败"
+            exit 1
+        fi
+    elif [ "$distro_type" = "ubuntu" ]; then
+        # 明确启用GDM3服务，确保服务正常运行
+        if chroot rootdir systemctl enable gdm3.service; then
+            echo "✅ GDM3显示管理器已启用"
+            # 添加调试信息：检查GDM3服务状态
+            if chroot rootdir systemctl is-enabled gdm3.service >/dev/null; then
+                echo "🔍 GDM3服务已启用"
+            else
+                echo "🔍 GDM3服务未启用"
+            fi
+        else
+            echo "❌ GDM3显示管理器启用失败"
+            exit 1
+        fi
+    fi
+    
+    # 安装必要的图形驱动和组件
+    echo "🔧 安装必要的图形组件..."
+    if chroot rootdir apt install -qq -y xserver-xorg x11-xserver-utils; then
+        echo "✅ 图形组件安装完成"
+        # 添加调试信息：检查关键图形组件是否安装
+        if chroot rootdir dpkg -l | grep -q xserver-xorg; then
+            echo "🔍 xserver-xorg已安装"
+        else
+            echo "🔍 xserver-xorg未安装"
+        fi
+    else
+        echo "❌ 图形组件安装失败"
+        exit 1
+    fi
+    
+    # 创建普通用户（用于桌面登录）
+    echo "👤 创建普通用户..."
+    if ! chroot rootdir id -u user >/dev/null 2>&1; then
+        chroot rootdir useradd -m -s /bin/bash user
+        echo "user:user" | chroot rootdir chpasswd
+        # 为用户添加sudo权限
+        chroot rootdir usermod -aG sudo user
+        echo "✅ 普通用户 'user' 创建完成（密码: user）"
+        
+        # 配置用户默认会话为Xfce
+        mkdir -p rootdir/home/user/.config
+        cat > rootdir/home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml << EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-session" version="1.0">
+  <property name="general" type="empty">
+    <property name="FailsafeSessionName" type="string" value="xfce"/>
+    <property name="SessionName" type="string" value="Default"/>
+  </property>
+</channel>
+EOF
+        # 设置用户权限
+        chroot rootdir chown -R user:user /home/user/.config
+        echo "✅ 用户Xfce会话配置完成"
+    else
+        echo "⚠️ 用户 'user' 已存在"
+    fi
+    
+    # 添加完整的图形系统状态检查
+    echo "🔍 图形系统状态检查..."
+    
+    # 检查关键图形服务状态
+    if [ "$distro_type" = "debian" ]; then
+        echo "📋 Debian图形服务状态检查:"
+        # 检查LightDM服务状态
+        if chroot rootdir systemctl is-enabled lightdm.service >/dev/null; then
+            echo "   ✅ LightDM服务已启用"
+        else
+            echo "   ❌ LightDM服务未启用"
+        fi
+        # 检查DBus服务状态
+        if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
+            echo "   ✅ DBus服务已启用"
+        else
+            echo "   ❌ DBus服务未启用"
+        fi
+    elif [ "$distro_type" = "ubuntu" ]; then
+        echo "📋 Ubuntu图形服务状态检查:"
+        # 检查GDM3服务状态
+        if chroot rootdir systemctl is-enabled gdm3.service >/dev/null; then
+            echo "   ✅ GDM3服务已启用"
+        else
+            echo "   ❌ GDM3服务未启用"
+        fi
+        # 检查DBus服务状态
+        if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
+            echo "   ✅ DBus服务已启用"
+        else
+            echo "   ❌ DBus服务未启用"
+        fi
+    fi
+    
+    # 检查Xfce会话配置
+    echo "📋 Xfce会话配置检查:"
+    if chroot rootdir dpkg -l | grep -q xfce4-session; then
+        echo "   ✅ Xfce会话管理器已安装"
+    else
+        echo "   ❌ Xfce会话管理器未安装"
+    fi
+    
+    # 检查默认启动目标
+    echo "📋 系统启动目标检查:"
+    current_target=$(chroot rootdir systemctl get-default)
+    echo "   当前默认启动目标: $current_target"
+    if [ "$current_target" = "graphical.target" ]; then
+        echo "   ✅ 系统将以图形模式启动"
+    else
+        echo "   ❌ 系统将不以图形模式启动"
+    fi
+    
+    echo "✅ 桌面环境和图形系统配置完成"
 fi
 
 # Unmount filesystems
