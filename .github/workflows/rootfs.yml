@@ -188,15 +188,20 @@ jobs:
         echo "时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
         echo "========================================"
 
-  # 仅在工作流手动触发且未跳过时创建Release
+  # 发布Release任务
   create-release:
     name: "🚀 发布 Release"
     needs: build-rootfs
     runs-on: ubuntu-24.04-arm
-    # 触发条件：手动触发 且 不跳过发布 且 所有必需构建都成功
+    # 触发条件：
+    # 1. 手动触发且不跳过发布，或
+    # 2. 推送到main分支，或
+    # 3. 创建了版本标签
+    # 并且所有构建任务都成功
     if: |
-      github.event_name == 'workflow_dispatch' &&
-      !github.event.inputs.skip_release &&
+      ((github.event_name == 'workflow_dispatch' && !github.event.inputs.skip_release) ||
+       github.event_name == 'push' ||
+       github.event_name == 'release') &&
       needs.build-rootfs.result == 'success'
     
     steps:

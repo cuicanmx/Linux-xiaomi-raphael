@@ -93,7 +93,8 @@ jobs:
         retention-days: 7
 
     - name: "🏷️ 创建Release"
-      if: github.event_name == 'workflow_dispatch'
+      # 在手动触发或推送到main分支时创建Release
+      if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
       id: create_release
       uses: softprops/action-gh-release@v1
       with:
