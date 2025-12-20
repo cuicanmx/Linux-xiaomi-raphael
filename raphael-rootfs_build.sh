@@ -88,10 +88,21 @@ echo "✅ 目录结构创建完成"
 # Bootstrap the rootfs
 echo "🌱 开始引导系统 (debootstrap)..."
 echo "📥 下载: $distro_type $distro_version"
-if sudo debootstrap --arch=arm64 --components=main,contrib,non-free,non-free-firmware "$distro_version" rootdir "http://deb.debian.org/debian/"; then
+
+# Set mirror based on distribution type
+if [ "$distro_type" = "debian" ]; then
+    mirror="http://deb.debian.org/debian/"
+elif [ "$distro_type" = "ubuntu" ]; then
+    mirror="http://ports.ubuntu.com/ubuntu-ports/"
+fi
+
+echo "🔗 使用镜像源: $mirror"
+
+if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
     echo "✅ 系统引导完成"
 else
     echo "❌ debootstrap 失败"
+    echo "💡 请检查网络连接和镜像源可用性"
     exit 1
 fi
 
