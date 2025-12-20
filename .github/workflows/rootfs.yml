@@ -44,7 +44,7 @@ jobs:
       run: |
         echo "⚙️ 安装构建工具..."
         sudo apt update
-        sudo apt install -y debootstrap qemu-user-static binfmt-support p7zip-full
+        sudo apt install -y debootstrap p7zip-full
         echo "✅ 工具安装完成"
 
     - name: "📦 下载内核包"
