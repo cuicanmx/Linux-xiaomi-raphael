@@ -1,189 +1,311 @@
-name: Build RootFS
+name: 🐧 Build RootFS
 
 on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: "内核版本号"
+        description: '内核版本 (对应Release标签，如 6.18)'
         required: true
-        default: "6.18"
+        default: '6.18'
+      skip_release:
+        description: '跳过创建GitHub Release'
+        required: false
+        type: boolean
+        default: false
   push:
-    branches:
-      - main
+    branches: [ main ]
+    tags:
+      - 'v*'
   pull_request:
+    branches: [ main ]
 
+# 关键修复：仅对 push 事件自动取消旧运行，手动触发独立运行
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+# 全局环境变量
+env:
+  DEFAULT_KERNEL: '6.18'
 
 jobs:
-  build:
-    name: "构建RootFS"
+  build-rootfs:
+    name: "🏗️ 构建 - ${{ matrix.distro }}"
     runs-on: ubuntu-24.04-arm
-    
+    # 为APT包启用缓存，显著加快后续构建速度
+    env:
+      APT_CACHE_DIR: /opt/apt-cache
     strategy:
+      # 定义要构建的所有发行版变体
       matrix:
-        distro: ['debian-server', 'debian-desktop', 'ubuntu-server', 'ubuntu-desktop']
-        include:
-          - distro: debian-server
-            kernel: '6.18'
-          - distro: debian-desktop
-            kernel: '6.18'
-          - distro: ubuntu-server
-            kernel: '6.18'
-          - distro: ubuntu-desktop
-            kernel: '6.18'
+        distro: [debian-server, debian-desktop, ubuntu-server, ubuntu-desktop]
+      # 防止一个变体构建失败导致整个任务失败
+      fail-fast: false
 
     steps:
     - name: "📥 检出代码"
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
-    - name: "🔧 安装必要工具"
+    - name: "♻️ 配置APT缓存"
       run: |
-        echo "⚙️ 安装构建工具..."
-        sudo apt update
-        sudo apt install -y debootstrap p7zip-full
+        echo "配置APT包缓存..."
+        sudo mkdir -p $APT_CACHE_DIR
+        # 仅在缓存为空或超过1天时更新
+        if [ ! -f "$APT_CACHE_DIR/last_updated" ] || \
+           [ $(($(date +%s) - $(date -r "$APT_CACHE_DIR/last_updated" +%s))) -gt 86400 ]; then
+          echo "更新APT缓存索引..."
+          sudo apt-get update -o Dir::Cache::Archives="$APT_CACHE_DIR"
+          sudo touch "$APT_CACHE_DIR/last_updated"
+        fi
+      shell: bash
+
+    - name: "🔧 安装构建工具"
+      run: |
+        echo "安装必需的系统工具..."
+        sudo apt-get install -y \
+          debootstrap \
+          p7zip-full \
+          curl \
+          binfmt-support \
+          qemu-user-static
         echo "✅ 工具安装完成"
+      env:
+        APT_GET_OPTIONS: "-o Dir::Cache::Archives=$APT_CACHE_DIR"
 
-    - name: "📦 下载内核包"
+    - name: "📦 获取内核版本"
+      id: kernel_version
       run: |
-        echo "📥 正在下载内核包..."
-        echo "🔗 从 Release: kernel-${{ matrix.kernel }} 下载"
+        # 优先级：手动输入 > Release标签 > 默认值
+        if [[ '${{ github.event_name }}' == 'workflow_dispatch' && -n '${{ github.event.inputs.kernel_version }}' ]]; then
+          KERNEL_VER='${{ github.event.inputs.kernel_version }}'
+          echo "使用手动输入的内核版本: $KERNEL_VER"
+        elif [[ '${{ github.ref_type }}' == 'tag' ]]; then
+          KERNEL_VER='${GITHUB_REF#refs/tags/}'
+          echo "使用Tag标签作为内核版本: $KERNEL_VER"
+        else
+          KERNEL_VER='${{ env.DEFAULT_KERNEL }}'
+          echo "使用默认内核版本: $KERNEL_VER"
+        fi
+        echo "kernel_version=$KERNEL_VER" >> $GITHUB_OUTPUT
+        echo "最终使用内核版本: $KERNEL_VER"
+      shell: bash
+
+    - name: "📥 下载内核包"
+      id: download_kernel
+      run: |
+        KERNEL_VER="${{ steps.kernel_version.outputs.kernel_version }}"
+        echo "从 Release [kernel-$KERNEL_VER] 下载内核包..."
         
-        gh release download kernel-${{ matrix.kernel }} \
+        # 使用GitHub CLI下载Release文件
+        gh release download "kernel-$KERNEL_VER" \
           --pattern "*-xiaomi-raphael*.deb" \
-          --repo "${{ github.repository }}"
+          --repo "${{ github.repository }}" \
+          --clobber
         
-        echo "✅ 内核包下载完成"
-        echo "📁 当前目录文件:"
-        ls -la *.deb
+        # 验证下载的文件
+        echo "下载的文件列表:"
+        ls -la *.deb 2>/dev/null || echo "未找到.deb文件"
         
-        # Verify downloads
         DEB_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
-        echo "📦 下载了 $DEB_COUNT 个内核包"
+        if [ $DEB_COUNT -eq 0 ]; then
+          echo "❌ 错误：未下载到任何内核包！"
+          exit 1
+        fi
+        
+        echo "✅ 成功下载 $DEB_COUNT 个内核包"
+        echo "deb_count=$DEB_COUNT" >> $GITHUB_OUTPUT
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: "🏗️ 构建rootfs"
+    - name: "🏗️ 执行RootFS构建"
+      id: build_rootfs
       run: |
-        echo "🚀 开始构建 ${{ matrix.distro }} 发行版"
-        echo "📋 配置:"
-        echo "  - 发行版: ${{ matrix.distro }}"
-        echo "  - 内核版本: ${{ matrix.kernel }}"
-        echo "  - 工作目录: $(pwd)"
+        DISTRO="${{ matrix.distro }}"
+        KERNEL_VER="${{ steps.kernel_version.outputs.kernel_version }}"
         
-        echo "⚙️ 执行构建脚本..."
-        sudo bash raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
+        echo "========================================"
+        echo "开始构建 RootFS"
+        echo "----------------------------------------"
+        echo "发行版: $DISTRO"
+        echo "内核: $KERNEL_VER"
+        echo "Runner: $(uname -m)"
+        echo "时间: $(date)"
+        echo "========================================"
         
-        echo "✅ ${{ matrix.distro }} 构建完成"
-      timeout-minutes: 60
+        # 检查构建脚本是否存在
+        if [ ! -f "raphael-rootfs_build.sh" ]; then
+          echo "❌ 错误：未找到构建脚本 raphael-rootfs_build.sh"
+          exit 1
+        fi
+        
+        # 赋予执行权限
+        chmod +x raphael-rootfs_build.sh
+        
+        # 执行构建脚本
+        echo "执行构建命令: sudo ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
+        sudo ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
+        
+        # 检查构建结果
+        if [ -f "rootfs.7z" ]; then
+          FILE_SIZE=$(du -h rootfs.7z | cut -f1)
+          echo "✅ RootFS 构建成功！"
+          echo "📦 文件: rootfs.7z"
+          echo "📏 大小: $FILE_SIZE"
+          
+          # 为产物生成唯一名称
+          TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+          NEW_FILENAME="$DISTRO-kernel-$KERNEL_VER-$TIMESTAMP.7z"
+          mv "rootfs.7z" "$NEW_FILENAME"
+          
+          echo "final_filename=$NEW_FILENAME" >> $GITHUB_OUTPUT
+          echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
+        else
+          echo "❌ 错误：未生成 rootfs.7z 文件！"
+          ls -la *.7z 2>/dev/null || echo "未找到任何.7z文件"
+          exit 1
+        fi
+      timeout-minutes: 90
 
-    - name: "📤 上传产物"
+    - name: "📤 上传构建产物"
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.distro }}-${{ matrix.kernel }}
-        path: "*.7z"
-        retention-days: 7
+        name: ${{ matrix.distro }}-${{ steps.kernel_version.outputs.kernel_version }}
+        path: ${{ matrix.distro }}-kernel-*.7z
+        retention-days: 14
+        if-no-files-found: error
+        compression-level: 0  # 文件已压缩，跳过二次压缩
 
-    - name: "📋 单任务总结"
+    - name: "📋 构建结果摘要"
       if: always()
       run: |
-        echo "📊 === 任务 ${{ matrix.distro }} 完成 ==="
-        echo "🎯 目标: ${{ matrix.distro }}"
-        echo "📦 内核: ${{ matrix.kernel }}"
-        echo "📁 产物: *.7z"
-        echo "⏱️  状态: ${{ job.status }}"
-        echo "==========================="
+        echo "========================================"
+        echo "构建结果摘要 - ${{ matrix.distro }}"
+        echo "----------------------------------------"
+        echo "状态: ${{ job.status }}"
+        echo "内核版本: ${{ steps.kernel_version.outputs.kernel_version }}"
+        echo "产物: ${{ steps.build_rootfs.outputs.final_filename || '未生成' }}"
+        echo "大小: ${{ steps.build_rootfs.outputs.file_size || '未知' }}"
+        echo "Runner: ${{ runner.os }}-${{ runner.arch }}"
+        echo "时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+        echo "========================================"
 
-  release:
-    name: "📦 创建Release"
-    needs: build
+  # 仅在工作流手动触发且未跳过时创建Release
+  create-release:
+    name: "🚀 发布 Release"
+    needs: build-rootfs
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
+    # 触发条件：手动触发 且 不跳过发布 且 所有必需构建都成功
+    if: |
+      github.event_name == 'workflow_dispatch' &&
+      !github.event.inputs.skip_release &&
+      needs.build-rootfs.result == 'success'
     
     steps:
-    - name: "📥 检出代码"
-      uses: actions/checkout@v4
+    - name: "📥 下载所有构建产物"
+      uses: actions/download-artifact@v4
+      with:
+        path: ./artifacts
+        pattern: '*'
+        merge-multiple: true
 
-    - name: "📦 下载所有产物"
+    - name: "🔍 准备发布文件"
+      id: prepare_release
       run: |
-        echo "🔍 下载所有构建产物..."
+        echo "整理发布文件..."
         
-        # Create artifacts directory
-        mkdir -p artifacts
+        # 创建发布目录
+        RELEASE_DIR="./release-assets"
+        mkdir -p "$RELEASE_DIR"
         
-        # Download all artifacts
-        echo "📥 正在下载所有构建产物..."
-        gh run download ${{ github.run_id }} \
-          --repo "${{ github.repository }}" \
-          --dir artifacts
+        # 查找并移动所有.7z文件
+        find ./artifacts -name "*.7z" -type f -exec mv {} "$RELEASE_DIR/" \;
         
-        echo "✅ 所有产物下载完成"
-        echo "📁 artifacts目录内容:"
-        find artifacts -type f -name "*.7z"
+        # 生成文件列表
+        echo "### 📦 包含的镜像文件" > "$RELEASE_DIR/filelist.md"
+        echo "" >> "$RELEASE_DIR/filelist.md"
         
-        ARTIFACT_COUNT=$(find artifacts -type f -name "*.7z" | wc -l)
-        echo "📦 共找到 $ARTIFACT_COUNT 个rootfs文件"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TOTAL_SIZE=0
+        for file in "$RELEASE_DIR"/*.7z; do
+          if [ -f "$file" ]; then
+            SIZE=$(du -h "$file" | cut -f1)
+            NAME=$(basename "$file")
+            echo "- **$NAME** ($SIZE)" >> "$RELEASE_DIR/filelist.md"
+            TOTAL_SIZE=$((TOTAL_SIZE + $(du -k "$file" | cut -f1)))
+          fi
+        done
+        
+        # 计算总大小
+        TOTAL_SIZE_MB=$((TOTAL_SIZE / 1024))
+        echo "" >> "$RELEASE_DIR/filelist.md"
+        echo "**总计**: $TOTAL_SIZE_MB MB" >> "$RELEASE_DIR/filelist.md"
+        
+        # 统计文件数量
+        FILE_COUNT=$(ls -1 "$RELEASE_DIR"/*.7z 2>/dev/null | wc -l)
+        
+        echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
+        echo "total_size_mb=$TOTAL_SIZE_MB" >> $GITHUB_OUTPUT
+        
+        echo "✅ 找到 $FILE_COUNT 个镜像文件，总计约 ${TOTAL_SIZE_MB}MB"
+        ls -lh "$RELEASE_DIR/"
 
-    - name: "🔎 查找并复制.7z文件"
+    - name: "🏷️ 生成版本标签"
+      id: generate_tag
       run: |
-        echo "🔍 查找 .7z 文件..."
+        # 基于日期和内核版本生成标签
+        DATE_TAG=$(date -u '+%Y%m%d')
+        KERNEL_REF="${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}"
+        SHORT_SHA="${GITHUB_SHA:0:8}"
         
-        # Find and copy .7z files
-        find artifacts -name "*.7z" -type f -exec cp {} . \;
-        
-        echo "✅ .7z 文件已复制到当前目录"
-        
-        echo "📁 当前目录下的文件:"
-        ls -la *.7z
-        
-        echo ""
-        echo "📊 文件统计:"
-        du -h *.7z
-        
-        FILE_COUNT=$(ls -1 *.7z 2>/dev/null | wc -l)
-        echo "📦 准备上传 $FILE_COUNT 个文件"
+        RELEASE_TAG="rootfs-$DATE_TAG-$KERNEL_REF-$SHORT_SHA"
+        echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+        echo "版本标签: $RELEASE_TAG"
 
-    - name: "🏷️ 创建Release"
+    - name: "🚀 创建 GitHub Release"
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: rootfs
-        name: "RootFS 镜像集合"
+        tag_name: ${{ steps.generate_tag.outputs.release_tag }}
+        name: "RootFS 镜像集合 - ${{ steps.generate_tag.outputs.release_tag }}"
         body: |
-          ## RootFS 镜像集合
+          ## 🐧 RootFS 系统镜像
           
-          📅 构建时间: ${{ github.run_created_at }}
+          ### 📋 构建信息
+          - **构建时间**: ${{ fromJSON(github.event).inputs.kernel_version || env.DEFAULT_KERNEL }}
+          - **内核版本**: ${{ fromJSON(github.event).inputs.kernel_version || env.DEFAULT_KERNEL }}
+          - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          - **包含变体**: Debian Server/Desktop, Ubuntu Server/Desktop
           
-          🖥️ 包含以下发行版:
-          - Debian Server
-          - Debian Desktop (Xfce)
-          - Ubuntu Server  
-          - Ubuntu Desktop
+          ### ⚠️ 默认凭据
+          - **用户名**: `root`
+          - **密码**: `1234` (首次登录后请立即修改！)
           
-          ⚙️ 内核版本: ${{ fromJSON(github.event).inputs.kernel_version || '6.18' }}
+          ### 🚀 使用说明
+          1. 将镜像刷写到手机存储
+          2. 使用 fastboot 刷入 boot.img
+          3. 设备将从 `userdata` 分区启动
           
-          🔐 默认root密码: 1234
+          ### 📦 文件列表
+          ${{ steps.prepare_release.outputs.file_list || '详见下方附件' }}
           
-          🐛 自动构建于 GitHub Actions
+          ---
           
-          ### 文件列表:
-          ${{ steps.find_files.outputs.file_list }}
+          *自动生成于 GitHub Actions*
+          
+          ${{ steps.prepare_release.outputs.filelist_text }}
         draft: false
         prerelease: false
-        files: "*.7z"
+        files: |
+          release-assets/*.7z
+        generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: "📋 发布总结"
-      if: always()
+    - name: "📊 发布完成摘要"
       run: |
-        echo "📊 ======== 发布总结 ========"
-        echo "🏗️  工作流: ${{ github.workflow }}"
-        echo "🎯 Release: rootfs"
-        echo "📦 文件数量: $FILE_COUNT"
-        echo "⏱️  运行时间: ${{ job.status }}"
-        echo "==========================="
+        echo "========================================"
+        echo "✅ Release 创建成功！"
+        echo "----------------------------------------"
+        echo "标签: ${{ steps.generate_tag.outputs.release_tag }}"
+        echo "文件: ${{ steps.prepare_release.outputs.file_count }} 个镜像"
+        echo "大小: ${{ steps.prepare_release.outputs.total_size_mb }} MB"
+        echo "链接: https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_tag.outputs.release_tag }}"
+        echo "========================================"
