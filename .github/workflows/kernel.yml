@@ -1,4 +1,4 @@
-name: Build Kernel
+name: Build Kernel 
 
 on:
   workflow_dispatch:
@@ -7,14 +7,6 @@ on:
         description: "内核版本号"
         required: true
         default: "6.18"
-  push:
-    branches:
-      - master
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,7 +15,8 @@ jobs:
     
     strategy:
       matrix:
-        version: ['6.18']
+        # 从手动触发输入获取版本，同时保持一个默认值
+        version: ['${{ inputs.kernel_version || '6.18' }}']
 
     steps:
     - name: "📥 检出代码"
