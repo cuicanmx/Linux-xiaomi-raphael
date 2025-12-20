@@ -86,6 +86,21 @@ echo "📋 复制内核文件..."
 cp arch/arm64/boot/Image.gz ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_version
 echo "✅ 复制内核镜像: vmlinuz-$_kernel_version"
 
+# Explicitly build device tree files
+echo "🔧 编译设备树文件..."
+if make -j$(nproc) ARCH=arm64 CROSS_COMPILE="ccache aarch64-linux-gnu-" dtbs; then
+    echo "✅ 设备树编译完成"
+else
+    echo "❌ 设备树编译失败"
+    echo "💡 尝试单独编译 raphael 设备树..."
+    if make -j$(nproc) ARCH=arm64 CROSS_COMPILE="ccache aarch64-linux-gnu-" sm8150-xiaomi-raphael.dtb; then
+        echo "✅ 单独设备树编译完成"
+    else
+        echo "❌ 设备树编译完全失败"
+        exit 1
+    fi
+fi
+
 # Copy device tree files (try different possible locations)
 echo "🔍 查找设备树文件..."
 if [ -f "arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb" ]; then
@@ -96,7 +111,12 @@ elif [ -f "arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb.gz" ]; then
     echo "✅ 复制压缩设备树文件: dtb-$_kernel_version.gz"
 else
     echo "⚠️  未找到设备树文件，尝试查找其他位置..."
-    find arch/arm64/boot/dts/qcom/ -name "*raphael*" -type f 2>/dev/null | head -5
+    echo "📂 检查设备树编译输出目录:"
+    find arch/arm64/boot/dts/ -name "*.dtb" -type f 2>/dev/null | head -10
+    echo "📂 检查 qcom 目录:"
+    find arch/arm64/boot/dts/qcom/ -name "*" -type f 2>/dev/null | head -10
+    echo "📂 检查整个编译输出:"
+    find . -name "*raphael*" -type f 2>/dev/null | head -10
     echo "❌ 错误: 未找到设备树文件"
     echo "💡 请检查设备树配置和编译输出"
     exit 1
