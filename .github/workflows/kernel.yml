@@ -13,10 +13,14 @@ jobs:
     name: "构建内核 v${{ inputs.kernel_version || '6.18' }}"
     runs-on: ubuntu-24.04-arm
     
+    # 使用环境变量来处理版本选择
+    env:
+      KERNEL_VERSION: ${{ inputs.kernel_version || '6.18' }}
+    
     strategy:
       matrix:
-        # 从手动触发输入获取版本，同时保持一个默认值
-        version: [${{ inputs.kernel_version || '"6.18"' }}]
+        # 使用固定版本，通过环境变量动态选择
+        version: ['6.18']
 
     steps:
     - name: "📥 检出代码"
@@ -47,13 +51,13 @@ jobs:
 
     - name: "🔨 编译内核"
       run: |
-        echo "🚀 开始编译内核版本 ${{ matrix.version }}"
+        echo "🚀 开始编译内核版本 ${{ env.KERNEL_VERSION }}"
         echo "💾 使用 ccache 加速编译"
         echo "📊 ccache 统计信息:"
         ccache --show-stats
         
         echo "⚙️ 执行编译脚本..."
-        sh raphael-kernel_build.sh ${{ matrix.version }}
+        sh raphael-kernel_build.sh ${{ env.KERNEL_VERSION }}
         
         echo "✅ 内核编译完成"
         echo "📊 编译后ccache统计:"
