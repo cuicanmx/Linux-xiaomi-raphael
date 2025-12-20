@@ -143,22 +143,23 @@ jobs:
         echo "执行构建命令: sudo ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
         sudo ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
-        # 检查构建结果
-        if [ -f "rootfs.7z" ]; then
-          FILE_SIZE=$(du -h rootfs.7z | cut -f1)
+        # 检查构建结果 - 查找动态生成的压缩包
+        OUTPUT_FILE="raphael-${DISTRO}-${KERNEL_VER}.7z"
+        if [ -f "$OUTPUT_FILE" ]; then
+          FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
           echo "✅ RootFS 构建成功！"
-          echo "📦 文件: rootfs.7z"
+          echo "📦 文件: $OUTPUT_FILE"
           echo "📏 大小: $FILE_SIZE"
           
           # 为产物生成唯一名称
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
           NEW_FILENAME="$DISTRO-kernel-$KERNEL_VER-$TIMESTAMP.7z"
-          mv "rootfs.7z" "$NEW_FILENAME"
+          mv "$OUTPUT_FILE" "$NEW_FILENAME"
           
           echo "final_filename=$NEW_FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
         else
-          echo "❌ 错误：未生成 rootfs.7z 文件！"
+          echo "❌ 错误：未生成 $OUTPUT_FILE 文件！"
           ls -la *.7z 2>/dev/null || echo "未找到任何.7z文件"
           exit 1
         fi

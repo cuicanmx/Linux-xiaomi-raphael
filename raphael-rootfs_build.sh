@@ -135,7 +135,7 @@ echo "✅ 虚拟文件系统挂载完成"
 
 # Install base packages
 echo "📦 安装基础系统包..."
-if chroot rootdir apt update; then
+if chroot rootdir apt -qq update; then
     echo "✅ 软件包列表更新完成"
 else
     echo "❌ 软件包列表更新失败"
@@ -143,7 +143,7 @@ else
 fi
 
 echo "🔧 安装系统工具包..."
-if chroot rootdir apt install -y systemd systemd-sysv init udev dbus alsa-ucm-conf; then
+if chroot rootdir apt install -qq -y systemd systemd-sysv init udev dbus alsa-ucm-conf; then
     echo "✅ 系统工具包安装完成"
 else
     echo "❌ 系统工具包安装失败"
@@ -196,7 +196,7 @@ touch rootdir/var/lib/gdm/run-initial-setup
 
 # Clean package cache
 echo "🧹 清理软件包缓存..."
-chroot rootdir apt clean
+chroot rootdir apt -qq clean
 
 # Set root password
 echo "🔐 设置root密码..."
@@ -214,10 +214,10 @@ echo "✅ 网络和主机名配置完成"
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
     echo "🖥️ 安装桌面环境..."
-    chroot rootdir apt update
+    chroot rootdir apt -qq update
     if [ "$distro_type" = "debian" ]; then
         echo "🎨 安装Xfce桌面环境..."
-        if chroot rootdir apt install -y xfce4 xfce4-goodies; then
+        if chroot rootdir apt install -qq -y xfce4 xfce4-goodies; then
             echo "✅ Xfce桌面环境安装完成 (Debian)"
         else
             echo "❌ Xfce桌面环境安装失败"
@@ -225,7 +225,7 @@ if [ "$distro_variant" = "desktop" ]; then
         fi
     elif [ "$distro_type" = "ubuntu" ]; then
         echo "🎨 安装Ubuntu桌面环境..."
-        if chroot rootdir apt install -y ubuntu-desktop-minimal; then
+        if chroot rootdir apt install -qq -y ubuntu-desktop-minimal; then
             echo "✅ Ubuntu桌面环境安装完成"
         else
             echo "❌ Ubuntu桌面环境安装失败"
