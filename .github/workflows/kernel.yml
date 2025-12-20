@@ -19,7 +19,7 @@ concurrency:
 jobs:
   build:
     name: "构建内核 v${{ inputs.kernel_version || '6.18' }}"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     
     strategy:
       matrix:
