@@ -2,85 +2,81 @@
 
 set -e
 
-# Check arguments
-if [ $# -ne 2 ]; then
-    echo "❌ 用法错误: $0 <发行版类型-变体> <内核版本>"
-    echo "   示例: $0 debian-server 6.18"
-    exit 1
-fi
+# 导入统一日志库
+source ./logging.sh
 
-# Check if running as root
-if [ "$(id -u)" -ne 0 ]; then
-    echo "❌ rootfs can only be built as root"
-    exit 1
-fi
+# 检查参数
+check_arguments 2 "$0 <发行版类型-变体> <内核版本>" "$0 debian-server 6.18"
 
-echo "🚀 开始构建 $1 发行版，内核版本 $2"
-echo "📋 参数检查: distro=$1, kernel=$2"
+# 检查root权限
+check_root
 
-# Parse distribution and variant
+log_header "开始构建 $1 发行版，内核版本 $2"
+log_info "参数检查: distro=$1, kernel=$2"
+
+# 解析发行版信息
 distro_type=$(echo "$1" | cut -d'-' -f1)
 distro_variant=$(echo "$1" | cut -d'-' -f2)
 
-# Set default version based on distribution type
+# 根据发行版类型设置默认版本
 if [ "$distro_type" = "debian" ]; then
     distro_version="trixie"  # Debian 13 (trixie)
 elif [ "$distro_type" = "ubuntu" ]; then
     distro_version="noble"   # Ubuntu 24.04 (noble)
 else
-    echo "❌ 错误: 不支持的发行版类型: $distro_type"
+    log_error "错误: 不支持的发行版类型: $distro_type"
     exit 1
 fi
 
-echo "🔍 解析发行版信息:"
-echo "  类型: $distro_type"
-echo "  变体: $distro_variant"
-echo "  版本: $distro_version (默认)"
-echo "  内核: $2"
+log_info "解析发行版信息:"
+log_info "  类型: $distro_type"
+log_info "  变体: $distro_variant"
+log_info "  版本: $distro_version (默认)"
+log_info "  内核: $2"
 
-# Check required kernel packages
-echo "📦 检查内核包文件..."
+# 检查必需的内核包
+log_package "检查内核包文件..."
 # 使用兼容的shell语法检查包文件
 found_packages=0
 missing_packages=""
 
 # 检查每个包文件（使用不带版本号的文件名）
 if ls linux-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    echo "✅ 找到: linux-xiaomi-raphael*.deb"
+    log_success "找到: linux-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
     missing_packages="linux-xiaomi-raphael*.deb $missing_packages"
-    echo "❌ 未找到: linux-xiaomi-raphael*.deb"
+    log_error "未找到: linux-xiaomi-raphael*.deb"
 fi
 
 if ls firmware-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    echo "✅ 找到: firmware-xiaomi-raphael*.deb"
+    log_success "找到: firmware-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
     missing_packages="firmware-xiaomi-raphael*.deb $missing_packages"
-    echo "❌ 未找到: firmware-xiaomi-raphael*.deb"
+    log_error "未找到: firmware-xiaomi-raphael*.deb"
 fi
 
 if ls alsa-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    echo "✅ 找到: alsa-xiaomi-raphael*.deb"
+    log_success "找到: alsa-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
     missing_packages="alsa-xiaomi-raphael*.deb $missing_packages"
-    echo "❌ 未找到: alsa-xiaomi-raphael*.deb"
+    log_error "未找到: alsa-xiaomi-raphael*.deb"
 fi
 
 if [ $found_packages -lt 3 ]; then
-    echo "❌ 错误: 缺少必需的内核包: $missing_packages"
-    echo "💡 请确保在工作流中正确下载了内核包"
-    echo "📁 当前目录文件列表:"
-    ls -la *.deb 2>/dev/null || echo "  没有找到 .deb 文件"
+    log_error "错误: 缺少必需的内核包: $missing_packages"
+    log_info "请确保在工作流中正确下载了内核包"
+    log_file "当前目录文件列表:"
+    ls -la *.deb 2>/dev/null || log_info "  没有找到 .deb 文件"
     exit 1
 fi
 
-echo "✅ 所有必需的内核包已就绪 ($found_packages/3)"
+log_success "所有必需的内核包已就绪 ($found_packages/3)"
 
-# Clean up old rootfs and image
-echo "🧹 清理旧的rootfs和镜像文件..."
+# 清理旧的rootfs和镜像文件
+log_file "清理旧的rootfs和镜像文件..."
 if [ -d "rootdir" ]; then
     umount rootdir/sys 2>/dev/null || true
     umount rootdir/proc 2>/dev/null || true
@@ -88,12 +84,12 @@ if [ -d "rootdir" ]; then
     umount rootdir/dev 2>/dev/null || true
     umount rootdir 2>/dev/null || true
     rm -rf rootdir
-    echo "✅ 旧目录已清理"
+    log_success "旧目录已清理"
 fi
 
 if [ -f "rootfs.img" ]; then
     rm -f rootfs.img
-    echo "✅ 旧镜像文件已清理"
+    log_success "旧镜像文件已清理"
 fi
 
 # Create and mount image file
@@ -142,12 +138,56 @@ else
     exit 1
 fi
 
-echo "🔧 安装系统工具包..."
+echo "📦 安装系统工具包..."
 if chroot rootdir apt install -qq -y systemd systemd-sysv init udev dbus alsa-ucm-conf; then
     echo "✅ 系统工具包安装完成"
 else
     echo "❌ 系统工具包安装失败"
     exit 1
+fi
+
+
+if [[ "$distro_variant" == *"desktop"* ]]; then
+    echo "🎨 桌面环境检测: 跳过SSH配置"
+else
+    echo "🖥️  服务器环境检测: 开始配置SSH"
+    
+    # 安装SSH服务器
+    echo "🔧 安装SSH服务器..."
+    if chroot rootdir apt install -qq -y openssh-server; then
+        echo "✅ SSH服务器安装完成"
+    else
+        echo "❌ SSH服务器安装失败"
+        exit 1
+    fi
+    
+    # 设置root密码
+    echo "🔑 设置root密码..."
+    echo "root:123456" | chroot rootdir chpasswd
+    echo "✅ root密码设置完成 (密码: 123456)"
+    
+    # 配置SSH允许root登录
+    echo "🔓 配置SSH允许root登录..."
+    echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
+    echo "PasswordAuthentication yes" >> rootdir/etc/ssh/sshd_config
+    
+    # 启用SSH服务
+    chroot rootdir systemctl enable ssh
+    
+    echo "✅ SSH配置完成: root登录已启用"
+    
+    # 添加重要安全提示
+    echo "⚠️  ⚠️  ⚠️  重要安全提示 ⚠️  ⚠️  ⚠️"
+    echo "root密码: 123456"
+    echo "首次登录后请立即修改密码！"
+    echo "⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️"
+fi
+
+echo "🔄 更新系统..."
+if chroot rootdir apt -qq upgrade -y; then
+    echo "✅ 系统更新完成"
+else
+    echo "⚠️  系统更新部分失败，继续构建"
 fi
 
 # Install device-specific packages
@@ -210,12 +250,6 @@ touch rootdir/var/lib/gdm/run-initial-setup
 # Clean package cache
 echo "🧹 清理软件包缓存..."
 chroot rootdir apt -qq clean
-
-# Set root password
-echo "🔐 设置root密码..."
-echo -e "1234\n1234" | sudo chroot rootdir passwd root > /dev/null 2>&1
-echo "✅ Root密码已设置为: 1234"
-
 # Network and system configuration
 echo "🔧 配置网络和系统设置..."
 echo "nameserver 223.5.5.5" | tee rootdir/etc/resolv.conf
@@ -276,4 +310,3 @@ else
 fi
 
 echo "🎉 $distro_type-$distro_variant IMG镜像构建完成！"
-echo "💡 引导命令行: root=PARTLABEL=linux"
