@@ -65,9 +65,7 @@ jobs:
         sudo apt-get install -y \
           debootstrap \
           p7zip-full \
-          curl \
-          binfmt-support \
-          qemu-user-static
+          curl
         echo "✅ 工具安装完成"
       env:
         APT_GET_OPTIONS: "-o Dir::Cache::Archives=$APT_CACHE_DIR"
@@ -193,7 +191,7 @@ jobs:
   create-release:
     name: "🚀 发布 Release"
     needs: build-rootfs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     # 触发条件：手动触发 且 不跳过发布 且 所有必需构建都成功
     if: |
       github.event_name == 'workflow_dispatch' &&

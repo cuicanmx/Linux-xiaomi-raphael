@@ -12,14 +12,24 @@ fi
 echo "🚀 开始构建 $1 发行版，内核版本 $2"
 echo "📋 参数检查: distro=$1, kernel=$2"
 
+# Parse distribution and variant
 distro_type=$(echo "$1" | cut -d'-' -f1)
 distro_variant=$(echo "$1" | cut -d'-' -f2)
-distro_version=$(echo "$1" | cut -d'-' -f3)
+
+# Set default version based on distribution type
+if [ "$distro_type" = "debian" ]; then
+    distro_version="trixie"  # Debian 12 (trixie)
+elif [ "$distro_type" = "ubuntu" ]; then
+    distro_version="noble"   # Ubuntu 24.04 (noble)
+else
+    echo "❌ 错误: 不支持的发行版类型: $distro_type"
+    exit 1
+fi
 
 echo "🔍 解析发行版信息:"
 echo "  类型: $distro_type"
 echo "  变体: $distro_variant"
-echo "  版本: $distro_version"
+echo "  版本: $distro_version (默认)"
 echo "  内核: $2"
 
 # Check required kernel packages
@@ -28,34 +38,36 @@ echo "📦 检查内核包文件..."
 found_packages=0
 missing_packages=""
 
-# 检查每个包文件
-if ls linux-xiaomi-raphael_$2*.deb 1> /dev/null 2>&1; then
-    echo "✅ 找到: linux-xiaomi-raphael_$2*.deb"
+# 检查每个包文件（使用不带版本号的文件名）
+if ls linux-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
+    echo "✅ 找到: linux-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
-    missing_packages="linux-xiaomi-raphael_$2*.deb $missing_packages"
-    echo "❌ 未找到: linux-xiaomi-raphael_$2*.deb"
+    missing_packages="linux-xiaomi-raphael*.deb $missing_packages"
+    echo "❌ 未找到: linux-xiaomi-raphael*.deb"
 fi
 
-if ls firmware-xiaomi-raphael_$2*.deb 1> /dev/null 2>&1; then
-    echo "✅ 找到: firmware-xiaomi-raphael_$2*.deb"
+if ls firmware-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
+    echo "✅ 找到: firmware-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
-    missing_packages="firmware-xiaomi-raphael_$2*.deb $missing_packages"
-    echo "❌ 未找到: firmware-xiaomi-raphael_$2*.deb"
+    missing_packages="firmware-xiaomi-raphael*.deb $missing_packages"
+    echo "❌ 未找到: firmware-xiaomi-raphael*.deb"
 fi
 
-if ls alsa-xiaomi-raphael_$2*.deb 1> /dev/null 2>&1; then
-    echo "✅ 找到: alsa-xiaomi-raphael_$2*.deb"
+if ls alsa-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
+    echo "✅ 找到: alsa-xiaomi-raphael*.deb"
     found_packages=$((found_packages + 1))
 else
-    missing_packages="alsa-xiaomi-raphael_$2*.deb $missing_packages"
-    echo "❌ 未找到: alsa-xiaomi-raphael_$2*.deb"
+    missing_packages="alsa-xiaomi-raphael*.deb $missing_packages"
+    echo "❌ 未找到: alsa-xiaomi-raphael*.deb"
 fi
 
 if [ $found_packages -lt 3 ]; then
     echo "❌ 错误: 缺少必需的内核包: $missing_packages"
     echo "💡 请确保在工作流中正确下载了内核包"
+    echo "📁 当前目录文件列表:"
+    ls -la *.deb 2>/dev/null || echo "  没有找到 .deb 文件"
     exit 1
 fi
 
