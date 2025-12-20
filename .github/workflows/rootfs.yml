@@ -19,10 +19,8 @@ on:
   pull_request:
     branches: [ master ]
 
-# 关键修复：仅对 push 事件自动取消旧运行，手动触发独立运行
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+# 🚨 关键修复：完全移除并发控制，确保手动触发不被取消
+# 删除整个 concurrency 配置块
 
 # 全局环境变量
 env:
@@ -46,29 +44,15 @@ jobs:
     - name: "📥 检出代码"
       uses: actions/checkout@v4
 
-    - name: "♻️ 配置APT缓存"
-      run: |
-        echo "配置APT包缓存..."
-        sudo mkdir -p $APT_CACHE_DIR
-        # 仅在缓存为空或超过1天时更新
-        if [ ! -f "$APT_CACHE_DIR/last_updated" ] || \
-           [ $(($(date +%s) - $(date -r "$APT_CACHE_DIR/last_updated" +%s))) -gt 86400 ]; then
-          echo "更新APT缓存索引..."
-          sudo apt-get update -o Dir::Cache::Archives="$APT_CACHE_DIR"
-          sudo touch "$APT_CACHE_DIR/last_updated"
-        fi
-      shell: bash
-
     - name: "🔧 安装构建工具"
       run: |
         echo "安装必需的系统工具..."
+        sudo apt-get update
         sudo apt-get install -y \
           debootstrap \
           p7zip-full \
           curl
         echo "✅ 工具安装完成"
-      env:
-        APT_GET_OPTIONS: "-o Dir::Cache::Archives=$APT_CACHE_DIR"
 
     - name: "📦 获取内核版本"
       id: kernel_version
@@ -143,8 +127,9 @@ jobs:
         echo "执行构建命令: sudo ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
         sudo ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
-        # 检查构建结果 - 查找动态生成的压缩包
-        OUTPUT_FILE="raphael-${DISTRO}-${KERNEL_VER}.7z"
+        # 检查构建结果 - 查找生成的压缩包
+        # 注意：根据你的构建脚本，产物名称为 rootfs.7z
+        OUTPUT_FILE="rootfs.7z"
         if [ -f "$OUTPUT_FILE" ]; then
           FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
           echo "✅ RootFS 构建成功！"
