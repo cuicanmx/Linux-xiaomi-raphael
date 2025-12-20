@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         # 从手动触发输入获取版本，同时保持一个默认值
-        version: ['${{ inputs.kernel_version || '6.18' }}']
+        version: [${{ inputs.kernel_version || '"6.18"' }}]
 
     steps:
     - name: "📥 检出代码"
