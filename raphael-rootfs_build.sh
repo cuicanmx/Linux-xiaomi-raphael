@@ -365,6 +365,11 @@ if [ "$distro_variant" = "desktop" ]; then
     echo "✅ 桌面环境和图形系统配置完成"
 fi
 
+# 执行内核更新脚本确保正常启动
+echo "🔧 执行内核更新脚本..."
+chroot rootdir bash -c "$(curl -fsSL https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/Update-kernel.sh)"
+echo "✅ 内核更新脚本执行完成"
+
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
 # 先卸载rootdir内部的虚拟文件系统
