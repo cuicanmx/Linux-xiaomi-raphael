@@ -231,7 +231,13 @@ fi
 
 # 安装设备特定服务
 echo "🔧 安装设备特定服务..."
-chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
+if [ "$distro_type" = "debian" ]; then
+    # Debian支持所有三个包
+    chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
+else
+    # Ubuntu只支持protection-domain-mapper
+    chroot rootdir apt install -y protection-domain-mapper
+fi
 sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
 echo "✅ 设备特定服务安装完成"
 
