@@ -147,6 +147,18 @@ else
 fi
 
 
+# 设置root密码 (所有环境通用)
+echo "🔑 设置root密码..."
+echo "root:123456" | chroot rootdir chpasswd
+echo "✅ root密码设置完成 (密码: 123456)"
+
+# 添加重要安全提示
+echo "⚠️  ⚠️  ⚠️  重要安全提示 ⚠️  ⚠️  ⚠️"
+echo "root密码: 123456"
+echo "首次登录后请立即修改密码！"
+echo "⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️"
+
+# 配置SSH (仅服务器环境)
 if [[ "$distro_variant" == *"desktop"* ]]; then
     echo "🎨 桌面环境检测: 跳过SSH配置"
 else
@@ -161,11 +173,6 @@ else
         exit 1
     fi
     
-    # 设置root密码
-    echo "🔑 设置root密码..."
-    echo "root:123456" | chroot rootdir chpasswd
-    echo "✅ root密码设置完成 (密码: 123456)"
-    
     # 配置SSH允许root登录
     echo "🔓 配置SSH允许root登录..."
     echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
@@ -175,12 +182,6 @@ else
     chroot rootdir systemctl enable ssh
     
     echo "✅ SSH配置完成: root登录已启用"
-    
-    # 添加重要安全提示
-    echo "⚠️  ⚠️  ⚠️  重要安全提示 ⚠️  ⚠️  ⚠️"
-    echo "root密码: 123456"
-    echo "首次登录后请立即修改密码！"
-    echo "⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️"
 fi
 
 echo "🔄 更新系统..."
@@ -434,13 +435,18 @@ fi
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
-# 使用-t参数指定文件系统类型，并使用-f参数强制卸载
+# 先卸载rootdir内部的虚拟文件系统
 umount -t sysfs -f rootdir/sys 2>/dev/null || echo "⚠️  sysfs未挂载或卸载失败"
 umount -t proc -f rootdir/proc 2>/dev/null || echo "⚠️  proc未挂载或卸载失败"
 umount -t devpts -f rootdir/dev/pts 2>/dev/null || echo "⚠️  devpts未挂载或卸载失败"
-# 使用-l参数延迟卸载设备
 umount -l rootdir/dev 2>/dev/null || echo "⚠️  /dev未挂载或卸载失败"
-# 移除rootdir目录（不要尝试直接卸载，因为它本身可能不是挂载点）
+
+# 然后卸载rootdir本身（rootfs.img挂载点）
+echo "🔓 卸载rootfs.img..."
+umount -f rootdir 2>/dev/null || echo "⚠️  rootfs.img未挂载或卸载失败"
+
+# 最后清理目录
+echo "🧹 清理rootdir目录..."
 rm -rf rootdir
 echo "✅ 虚拟文件系统卸载和目录清理完成"
 

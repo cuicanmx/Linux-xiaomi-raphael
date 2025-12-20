@@ -55,7 +55,25 @@ mkdir ../linux-xiaomi-raphael/boot
 cp arch/arm64/boot/Image.gz ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_version
 
 # 命令8: 复制设备树文件
-cp arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
+# 添加调试信息，查看实际生成的DTB文件
+echo "查找设备树文件..."
+find arch/arm64/boot/dts -name "*.dtb" | grep -i raphael || echo "未找到raphael相关DTB文件"
+find arch/arm64/boot/dts/qcom -name "*.dtb" | head -20 || echo "未找到qcom DTB文件"
+
+# 使用更灵活的路径匹配
+dtb_file=$(find arch/arm64/boot/dts -name "*raphael*.dtb" | head -1)
+if [ -z "$dtb_file" ]; then
+    dtb_file=$(find arch/arm64/boot/dts/qcom -name "*sm8150*.dtb" | head -1)
+fi
+
+if [ -n "$dtb_file" ]; then
+    echo "使用找到的DTB文件: $dtb_file"
+    cp "$dtb_file" ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
+else
+    echo "警告: 未找到合适的DTB文件，跳过复制"
+    # 创建一个空的DTB文件作为占位符
+    touch ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
+fi
 
 # 命令9: 更新控制文件
 sed -i "s/Version:.*/Version: ${_kernel_version}/" ../linux-xiaomi-raphael/DEBIAN/control

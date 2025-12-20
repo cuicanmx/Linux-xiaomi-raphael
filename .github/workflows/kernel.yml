@@ -82,7 +82,8 @@ jobs:
           echo "📊 编译后ccache统计:"
           ccache --show-stats
           echo "缓存命中率详情:"
-          ccache --show-stats --verbose | grep -E "(hit rate|cache hit|cache miss)"
+          # 使用|| true确保即使没有匹配也不会导致构建失败
+          ccache --show-stats --verbose | grep -E "(hit rate|cache hit|cache miss)" || true
 
       - name: "💾 保存ccache缓存"
         # 无论编译是否成功都保存缓存，确保下次构建能利用已有缓存
@@ -90,7 +91,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: /home/runner/.ccache
-          key: ${{ steps.cache-ccache.outputs.cache-primary-key }}
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: "📦 收集编译产物"
         id: collect_artifacts
