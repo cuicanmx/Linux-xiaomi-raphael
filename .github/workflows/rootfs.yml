@@ -1,4 +1,4 @@
-name: 🐧 Build RootFS (仅手动触发)
+name: 🐧Build RootFS
 
 on:
   workflow_dispatch:
