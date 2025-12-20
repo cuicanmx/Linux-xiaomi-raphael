@@ -200,7 +200,6 @@ umount rootdir/sys
 umount rootdir/proc
 umount rootdir/dev/pts
 umount rootdir/dev
-umount rootdir
 echo "✅ 虚拟文件系统卸载完成"
 
 # Create 7z archive
