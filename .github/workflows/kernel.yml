@@ -29,6 +29,10 @@ jobs:
           
           echo "📦 检查ccache状态..."
           ccache --version
+          # 确保ccache目录存在
+          mkdir -p /home/runner/.ccache
+          # 设置ccache权限
+          chmod 777 /home/runner/.ccache
           ccache --max-size=10G
           ccache --show-stats
 
