@@ -229,6 +229,17 @@ else
     exit 1
 fi
 
+# 安装设备特定服务
+echo "🔧 安装设备特定服务..."
+chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
+sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
+echo "✅ 设备特定服务安装完成"
+
+# 更新initramfs
+echo "🔧 更新initramfs..."
+chroot rootdir update-initramfs -c -k all
+echo "✅ initramfs更新完成"
+
 echo "✅ 所有设备特定包安装完成"
 
 # 配置自动DHCP网络
@@ -246,8 +257,8 @@ echo "✅ 自动DHCP网络配置完成。"
 
 # Create fstab
 echo "📋 创建文件系统表..."
-echo "PARTLABEL=linux / ext4 errors=remount-ro,x-systemd.growfs 0 1
-PARTLABEL=esp /boot/efi vfat umask=0077 0 1" | tee rootdir/etc/fstab
+echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
+PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
 
 
 
