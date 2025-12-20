@@ -5,6 +5,9 @@ set -e
 # 导入统一日志库
 . ./logging.sh
 
+# 设置脚本参数数量
+SCRIPT_ARG_COUNT=$#
+
 # 检查参数
 check_arguments 2 "$0 <发行版类型-变体> <内核版本>" "$0 debian-server 6.18"
 
