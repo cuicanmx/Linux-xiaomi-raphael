@@ -20,6 +20,19 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: "💾 设置ccache缓存 (先于构建工具)"
+        uses: actions/cache@v4
+        id: cache-ccache
+        with:
+          path: /home/runner/.ccache
+          # 修复1: 使用固定的key结构，移除脚本哈希（脚本可能频繁变化）
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
+          # 修复2: 简化restore-keys，确保能找到历史缓存
+          restore-keys: |
+            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-
+            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
+            ${{ runner.os }}-ccache-kernel-
+
       - name: "🔧 设置构建环境"
         run: |
           echo "⚙️ 正在安装必要的构建工具..."
@@ -29,45 +42,55 @@ jobs:
           
           echo "📦 检查ccache状态..."
           ccache --version
-          # 确保ccache目录存在
-          mkdir -p /home/runner/.ccache
-          # 设置ccache权限
-          chmod 777 /home/runner/.ccache
-          ccache --max-size=10G
+          
+          # 确保ccache目录存在（无论缓存是否命中）
+          sudo mkdir -p /home/runner/.ccache
+          sudo chown -R runner:runner /home/runner/.ccache
+          sudo chmod -R 777 /home/runner/.ccache
+          
+          # 配置ccache
+          ccache --set-config=max_size=10G
+          ccache --set-config=cache_dir=/home/runner/.ccache
+          
+          echo "📊 缓存恢复状态: ${{ steps.cache-ccache.outputs.cache-hit }}"
           ccache --show-stats
 
-      - name: "💾 设置ccache缓存"
-        uses: actions/cache@v4
-        with:
-          # 使用明确路径，避免 `~` 可能引起的解析问题
-          path: /home/runner/.ccache
-          # 关键修复：移除 github.sha，使用分支名和脚本哈希，使同一分支的多次构建能共享缓存
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ hashFiles('raphael-kernel_build.sh') }}
-          restore-keys: |
-            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-
-            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
-            ${{ runner.os }}-ccache-kernel-
-
       - name: "🔨 编译内核"
+        id: build
         run: |
           echo "🚀 开始编译内核版本 ${{ github.event.inputs.kernel_version || '6.18' }}"
-          echo "💾 使用 ccache 加速编译"
-          echo "📊 ccache 统计信息 (详情):"
-          ccache --show-stats --verbose
+          echo "💾 缓存状态: ${{ steps.cache-ccache.outputs.cache-hit }}"
+          
+          echo "📊 编译前ccache统计:"
+          ccache --show-stats
           
           echo "⚙️ 执行编译脚本..."
-          # 传递动态版本号给编译脚本
+          # 设置ccache环境变量，确保编译过程使用ccache
+          export CCACHE_DIR=/home/runner/.ccache
+          export CCACHE_MAXSIZE=10G
+          export PATH="/usr/lib/ccache:$PATH"
+          
+          # 检查是否实际使用了ccache
+          echo "检查编译器是否使用ccache包装:"
+          which gcc
+          gcc --version | head -1
+          
+          # 执行编译
           sudo bash raphael-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}"
           
           echo "✅ 内核编译完成"
-          echo "📊 编译后ccache统计 (详情):"
-          ccache --show-stats --verbose
-        env:
-          # 统一使用绝对路径，确保与缓存步骤一致
-          CCACHE_DIR: /home/runner/.ccache
-          CCACHE_MAXSIZE: 10G
-          # 更精准地设置PATH，确保ccache被优先找到
-          PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          echo "📊 编译后ccache统计:"
+          ccache --show-stats
+          echo "缓存命中率详情:"
+          ccache --show-stats --verbose | grep -E "(hit rate|cache hit|cache miss)"
+
+      - name: "💾 保存ccache缓存"
+        # 无论编译是否成功都保存缓存，确保下次构建能利用已有缓存
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: /home/runner/.ccache
+          key: ${{ steps.cache-ccache.outputs.cache-primary-key }}
 
       - name: "📦 收集编译产物"
         id: collect_artifacts
@@ -89,18 +112,15 @@ jobs:
       - name: "📤 上传构建产物"
         uses: actions/upload-artifact@v4
         with:
-          # 关键修复：产物名称包含动态内核版本，便于区分
           name: kernel-${{ github.event.inputs.kernel_version || '6.18' }}
           path: "*.deb"
           retention-days: 7
           if-no-files-found: error
 
       - name: "🏷️ 创建GitHub Release"
-        # 关键修复：仅在成功生成包文件后才创建Release
         if: steps.collect_artifacts.outputs.pkg_count > 0 && github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v1
         with:
-          # 关键修复：Release标签使用动态内核版本
           tag_name: kernel-${{ github.event.inputs.kernel_version || '6.18' }}
           name: "Kernel ${{ github.event.inputs.kernel_version || '6.18' }}"
           body: |
@@ -128,6 +148,7 @@ jobs:
           echo "📊 ======== 构建总结 ========"
           echo "🏗️  工作流: ${{ github.workflow }}"
           echo "🎯 目标版本: ${{ github.event.inputs.kernel_version || '6.18' }}"
+          echo "💾 缓存命中: ${{ steps.cache-ccache.outputs.cache-hit }}"
           echo "📁 产物数量: ${{ steps.collect_artifacts.outputs.pkg_count || 0 }}"
           echo "⏱️  运行状态: ${{ job.status }}"
           echo "==========================="
