@@ -1,131 +1,124 @@
-name: 🛠️Build Kernel 
+name: 🛠️ Build Kernel
 
 on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: "内核版本号"
+        description: "内核版本号 (如: 6.18)"
         required: true
         default: "6.18"
 
 jobs:
   build:
-    name: "构建内核 v${{ inputs.kernel_version || '6.18' }}"
+    name: "构建内核 v${{ github.event.inputs.kernel_version || '6.18' }}"
     runs-on: ubuntu-24.04-arm
-    
-    # 使用环境变量来处理版本选择
-    env:
-      KERNEL_VERSION: ${{ inputs.kernel_version || '6.18' }}
-    
-    strategy:
-      matrix:
-        # 使用固定版本，通过环境变量动态选择
-        version: ['6.18']
 
     steps:
-    - name: "📥 检出代码"
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        submodules: recursive
+      - name: "📥 检出代码"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
 
-    - name: "🔧 设置构建环境"
-      run: |
-        echo "⚙️ 正在安装必要的构建工具..."
-        sudo apt update
-        sudo apt install -y build-essential flex bison libssl-dev libelf-dev bc ccache
-        echo "✅ 构建工具安装完成"
-        
-        echo "📦 检查ccache状态..."
-        ccache --version
-        ccache --max-size=10G
-        ccache --show-stats
-
-    - name: "💾 设置ccache缓存"
-      uses: actions/cache@v4
-      with:
-        path: ~/.ccache
-        key: ${{ runner.os }}-ccache-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-ccache-
-        # 强制保存缓存，即使工作流失败
-        post-if: always()
-        # 确保缓存的上传尽管失败
-        continue-on-error: true
-      # 确保缓存的上传不论前面是否失败
-      continue-on-error: true
-      if: always()
-
-    - name: "🔨 编译内核"
-      run: |
-        echo "🚀 开始编译内核版本 ${{ env.KERNEL_VERSION }}"
-        echo "💾 使用 ccache 加速编译"
-        echo "📊 ccache 统计信息:"
-        ccache --show-stats
-        
-        echo "⚙️ 执行编译脚本..."
-        sudo bash raphael-kernel_build.sh ${{ env.KERNEL_VERSION }}
-        
-        echo "✅ 内核编译完成"
-        echo "📊 编译后ccache统计:"
-        ccache --show-stats
-      env:
-        CCACHE_DIR: ~/.ccache
-        CCACHE_MAXSIZE: 10G
-        PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-    - name: "📦 收集编译产物"
-      run: |
-        echo "🔍 查找编译产物..."
-        find . -name "*.deb" -type f | head -20
-        
-        echo "📁 编译产物列表:"
-        ls -la *.deb || echo "⚠️  未找到 .deb 文件"
-        echo ""
-        echo "📊 文件大小统计:"
-        du -h *.deb 2>/dev/null || echo "暂无产物文件"
-        
-        # Count packages
-        PKG_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
-        echo "📦 共找到 $PKG_COUNT 个包文件"
-
-    - name: "📤 上传产物"
-      uses: actions/upload-artifact@v4
-      with:
-        name: kernel-${{ matrix.version }}
-        path: "*.deb"
-        retention-days: 7
-
-    - name: "🏷️ 创建Release"
-      if: github.event_name == 'workflow_dispatch'
-      id: create_release
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: kernel-${{ matrix.version }}
-        name: "Kernel ${{ matrix.version }}"
-        body: |
-          ## 内核版本 ${{ matrix.version }}
+      - name: "🔧 设置构建环境"
+        run: |
+          echo "⚙️ 正在安装必要的构建工具..."
+          sudo apt update
+          sudo apt install -y build-essential flex bison libssl-dev libelf-dev bc ccache
+          echo "✅ 构建工具安装完成"
           
-          📅 构建时间: ${{ fromJSON(github.event).inputs.kernel_version || matrix.version }}
-          
-          ⚙️ 包含以下包:
-          - linux-xiaomi-raphael_${{ matrix.version }}*.deb
-          - firmware-xiaomi-raphael_${{ matrix.version }}*.deb
-          - alsa-xiaomi-raphael_${{ matrix.version }}*.deb
-          
-          🐛 自动构建于 GitHub Actions
-        draft: false
-        prerelease: false
-        files: "*.deb"
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "📦 检查ccache状态..."
+          ccache --version
+          ccache --max-size=10G
+          ccache --show-stats
 
-    - name: "📋 构建总结"
-      if: always()
-      run: |
-        echo "📊 ======== 构建总结 ========"
-        echo "🏗️  工作流: ${{ github.workflow }}"
-        echo "🎯 目标版本: ${{ matrix.version }}"
-        echo "📁 产物数量: $PKG_COUNT"
-        echo "⏱️  运行时间: ${{ job.status }}"
-        echo "==========================="
+      - name: "💾 设置ccache缓存"
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          # 关键修复：缓存键使用动态内核版本，确保不同版本缓存隔离
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
+            ${{ runner.os }}-ccache-kernel-
+
+      - name: "🔨 编译内核"
+        run: |
+          echo "🚀 开始编译内核版本 ${{ github.event.inputs.kernel_version || '6.18' }}"
+          echo "💾 使用 ccache 加速编译"
+          echo "📊 ccache 统计信息:"
+          ccache --show-stats
+          
+          echo "⚙️ 执行编译脚本..."
+          # 传递动态版本号给编译脚本
+          sudo bash raphael-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}"
+          
+          echo "✅ 内核编译完成"
+          echo "📊 编译后ccache统计:"
+          ccache --show-stats
+        env:
+          CCACHE_DIR: ~/.ccache
+          CCACHE_MAXSIZE: 10G
+          PATH: /usr/lib/ccache:$PATH
+
+      - name: "📦 收集编译产物"
+        id: collect_artifacts
+        run: |
+          echo "🔍 查找编译产物..."
+          find . -name "*.deb" -type f | head -20
+          
+          echo "📁 编译产物列表:"
+          ls -la *.deb 2>/dev/null || echo "⚠️  未找到 .deb 文件"
+          echo ""
+          echo "📊 文件大小统计:"
+          du -h *.deb 2>/dev/null || echo "暂无产物文件"
+          
+          # 统计包数量并输出，供后续步骤使用
+          PKG_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
+          echo "📦 共找到 $PKG_COUNT 个包文件"
+          echo "pkg_count=$PKG_COUNT" >> $GITHUB_OUTPUT
+
+      - name: "📤 上传构建产物"
+        uses: actions/upload-artifact@v4
+        with:
+          # 关键修复：产物名称包含动态内核版本，便于区分
+          name: kernel-${{ github.event.inputs.kernel_version || '6.18' }}
+          path: "*.deb"
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: "🏷️ 创建GitHub Release"
+        # 关键修复：仅在成功生成包文件后才创建Release
+        if: steps.collect_artifacts.outputs.pkg_count > 0 && github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v1
+        with:
+          # 关键修复：Release标签使用动态内核版本
+          tag_name: kernel-${{ github.event.inputs.kernel_version || '6.18' }}
+          name: "Kernel ${{ github.event.inputs.kernel_version || '6.18' }}"
+          body: |
+            ## 内核版本 ${{ github.event.inputs.kernel_version || '6.18' }}
+            
+            📅 构建时间: ${{ github.event.inputs.kernel_version || '6.18' }}
+            
+            ⚙️ 包含以下包:
+            - linux-xiaomi-raphael_*.deb
+            - firmware-xiaomi-raphael_*.deb  
+            - alsa-xiaomi-raphael_*.deb
+            
+            🐛 自动构建于 GitHub Actions
+          draft: false
+          prerelease: false
+          files: "*.deb"
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "📋 构建总结"
+        if: always()
+        run: |
+          echo "📊 ======== 构建总结 ========"
+          echo "🏗️  工作流: ${{ github.workflow }}"
+          echo "🎯 目标版本: ${{ github.event.inputs.kernel_version || '6.18' }}"
+          echo "📁 产物数量: ${{ steps.collect_artifacts.outputs.pkg_count || 0 }}"
+          echo "⏱️  运行状态: ${{ job.status }}"
+          echo "==========================="
