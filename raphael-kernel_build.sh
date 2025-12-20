@@ -44,6 +44,10 @@ cp arch/arm64/boot/Image.gz ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_versio
 make -j$(nproc) ARCH=arm64 CROSS_COMPILE="ccache aarch64-linux-gnu-" dtbs
 
 # 复制设备树文件
+# 查找设备树文件
+find arch/arm64/boot/dts -name "sm8150-xiaomi-raphael.dtb" -type f | head -1
+
+# 复制设备树文件
 cp arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
 
 # 更新 control 文件版本
