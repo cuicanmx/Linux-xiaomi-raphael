@@ -50,6 +50,8 @@ jobs:
           ${{ runner.os }}-ccache-
         # 强制保存缓存，即使工作流失败
         post-if: always()
+        # 确保缓存的上传尽管失败
+        continue-on-error: true
       # 确保缓存的上传不论前面是否失败
       continue-on-error: true
       if: always()
@@ -62,7 +64,7 @@ jobs:
         ccache --show-stats
         
         echo "⚙️ 执行编译脚本..."
-        sh raphael-kernel_build.sh ${{ env.KERNEL_VERSION }}
+        sudo bash raphael-kernel_build.sh ${{ env.KERNEL_VERSION }}
         
         echo "✅ 内核编译完成"
         echo "📊 编译后ccache统计:"
