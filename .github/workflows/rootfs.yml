@@ -13,11 +13,11 @@ on:
         type: boolean
         default: false
   push:
-    branches: [ main ]
+    branches: [ master ]
     tags:
       - 'v*'
   pull_request:
-    branches: [ main ]
+    branches: [ master ]
 
 # 关键修复：仅对 push 事件自动取消旧运行，手动触发独立运行
 concurrency:

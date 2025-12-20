@@ -9,7 +9,7 @@ on:
         default: "6.18"
   push:
     branches:
-      - main
+      - master
   pull_request:
 
 concurrency:
