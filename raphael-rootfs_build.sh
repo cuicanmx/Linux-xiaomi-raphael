@@ -142,7 +142,7 @@ else
 fi
 
 echo "📦 安装系统工具包..."
-if chroot rootdir apt install -qq -y systemd systemd-sysv init udev dbus alsa-ucm-conf initramfs-tools wget u-boot-tools-; then
+if chroot rootdir apt install -qq -y systemd systemd-sysv init udev dbus alsa-ucm-conf initramfs-tools wget u-boot-tools; then
     echo "✅ 系统工具包安装完成"
 else
     echo "❌ 系统工具包安装失败"
@@ -208,21 +208,21 @@ echo "✅ 内核包复制完成"
 
 # Install custom kernel packages
 echo "🔧 安装定制内核包..."
-if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb; then
+if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael*.deb; then
     echo "✅ linux-xiaomi-raphael 安装完成"
 else
     echo "❌ linux-xiaomi-raphael 安装失败"
     exit 1
 fi
 
-if chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb; then
+if chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael*.deb; then
     echo "✅ firmware-xiaomi-raphael 安装完成"
 else
     echo "❌ firmware-xiaomi-raphael 安装失败"
     exit 1
 fi
 
-if chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb; then
+if chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael*.deb; then
     echo "✅ alsa-xiaomi-raphael 安装完成"
 else
     echo "❌ alsa-xiaomi-raphael 安装失败"

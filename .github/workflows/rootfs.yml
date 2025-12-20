@@ -218,9 +218,12 @@ jobs:
         
         echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
         echo "total_size_mb=$TOTAL_SIZE_MB" >> $GITHUB_OUTPUT
-        # 输出文件列表内容到变量
+        # 输出文件列表内容到变量 - 使用GitHub Actions多行输出语法
         if [ -f "$RELEASE_DIR/filelist.md" ]; then
-          echo "filelist_text=$(cat "$RELEASE_DIR/filelist.md")" >> $GITHUB_OUTPUT
+          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
+          echo "filelist_text<<$EOF" >> $GITHUB_OUTPUT
+          cat "$RELEASE_DIR/filelist.md" >> $GITHUB_OUTPUT
+          echo "$EOF" >> $GITHUB_OUTPUT
         fi
         
         echo "✅ 找到 $FILE_COUNT 个镜像文件，总计约 ${TOTAL_SIZE_MB}MB"
