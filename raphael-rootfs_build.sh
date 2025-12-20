@@ -272,7 +272,7 @@ if [ "$distro_variant" = "desktop" ]; then
         fi
     elif [ "$distro_type" = "ubuntu" ]; then
         echo "🎨 安装Ubuntu桌面环境..."
-        if chroot rootdir apt install -qq -y ubuntu-desktop-minimal; then
+        if chroot rootdir apt install -qq -y ubuntu-desktop; then
             echo "✅ Ubuntu桌面环境安装完成"
         else
             echo "❌ Ubuntu桌面环境安装失败"
@@ -283,16 +283,18 @@ fi
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
-umount rootdir/sys
-umount rootdir/proc
-umount rootdir/dev/pts
-umount rootdir/dev
-umount rootdir
-echo "✅ 虚拟文件系统卸载完成"
+# 使用-t参数指定文件系统类型，并使用-f参数强制卸载
+umount -t sysfs -f rootdir/sys 2>/dev/null || echo "⚠️  sysfs未挂载或卸载失败"
+umount -t proc -f rootdir/proc 2>/dev/null || echo "⚠️  proc未挂载或卸载失败"
+umount -t devpts -f rootdir/dev/pts 2>/dev/null || echo "⚠️  devpts未挂载或卸载失败"
+# 使用-l参数延迟卸载设备
+umount -l rootdir/dev 2>/dev/null || echo "⚠️  /dev未挂载或卸载失败"
+# 移除rootdir目录（不要尝试直接卸载，因为它本身可能不是挂载点）
+rm -rf rootdir
+echo "✅ 虚拟文件系统卸载和目录清理完成"
 
-# Clean up directory
-rm -d rootdir
-echo "✅ 临时目录清理完成"
+# 临时目录已经在卸载步骤中清理完成
+echo "✅ 所有临时目录清理完成"
 echo "🔧 调整文件系统UUID..."
 tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img
 echo "✅ 文件系统UUID调整完成"

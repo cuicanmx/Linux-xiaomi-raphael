@@ -145,7 +145,9 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.distro }}-${{ steps.kernel_version.outputs.kernel_version }}
-        path: ${{ matrix.distro }}-kernel-*.7z
+        path: |
+          ${{ matrix.distro }}-kernel-*.7z
+          *.img
         retention-days: 14
         if-no-files-found: error
         compression-level: 0  # 文件已压缩，跳过二次压缩
@@ -190,15 +192,15 @@ jobs:
         RELEASE_DIR="./release-assets"
         mkdir -p "$RELEASE_DIR"
         
-        # 查找并移动所有.7z文件
-        find ./artifacts -name "*.7z" -type f -exec mv {} "$RELEASE_DIR/" \;
+        # 查找并移动所有.7z和.img文件
+        find ./artifacts -name "*.7z" -o -name "*.img" -type f -exec mv {} "$RELEASE_DIR/" \;
         
         # 生成文件列表
         echo "### 📦 包含的镜像文件" > "$RELEASE_DIR/filelist.md"
         echo "" >> "$RELEASE_DIR/filelist.md"
         
         TOTAL_SIZE=0
-        for file in "$RELEASE_DIR"/*.7z; do
+        for file in "$RELEASE_DIR"/*; do
           if [ -f "$file" ]; then
             SIZE=$(du -h "$file" | cut -f1)
             NAME=$(basename "$file")
@@ -213,10 +215,14 @@ jobs:
         echo "**总计**: $TOTAL_SIZE_MB MB" >> "$RELEASE_DIR/filelist.md"
         
         # 统计文件数量
-        FILE_COUNT=$(ls -1 "$RELEASE_DIR"/*.7z 2>/dev/null | wc -l)
+        FILE_COUNT=$(ls -1 "$RELEASE_DIR"/* 2>/dev/null | wc -l)
         
         echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
         echo "total_size_mb=$TOTAL_SIZE_MB" >> $GITHUB_OUTPUT
+        # 输出文件列表内容到变量
+        if [ -f "$RELEASE_DIR/filelist.md" ]; then
+          echo "filelist_text=$(cat "$RELEASE_DIR/filelist.md")" >> $GITHUB_OUTPUT
+        fi
         
         echo "✅ 找到 $FILE_COUNT 个镜像文件，总计约 ${TOTAL_SIZE_MB}MB"
         ls -lh "$RELEASE_DIR/"
