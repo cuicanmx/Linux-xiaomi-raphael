@@ -48,6 +48,8 @@ jobs:
         key: ${{ runner.os }}-ccache-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-ccache-
+        # 强制保存缓存，即使工作流失败
+        post-if: always()
       # 确保缓存的上传不论前面是否失败
       continue-on-error: true
       if: always()

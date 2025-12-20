@@ -237,32 +237,23 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.generate_tag.outputs.release_tag }}
-        name: "RootFS 镜像集合 - ${{ steps.generate_tag.outputs.release_tag }}"
+        name: "Ubuntu/Debian for Raphael - ${{ steps.generate_tag.outputs.release_tag }}"
         body: |
-          ## 🐧 RootFS 系统镜像
+          # 🐧 Ubuntu/Debian 镜像集合
           
-          ### 📋 构建信息
-          - **构建时间**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
+          ## 📋 构建信息
           - **内核版本**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
           - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
           - **包含变体**: Debian Server/Desktop, Ubuntu Server/Desktop
           
-          ### ⚠️ 默认凭据
+          ## ⚠️ 重要提示
+          ### 默认凭据
           - **用户名**: `root`
           - **密码**: `1234` (首次登录后请立即修改！)
           
-          ### 🚀 使用说明
-          1. 将镜像刷写到手机存储
-          2. 使用 fastboot 刷入 boot.img
-          3. 设备将从 `userdata` 分区启动
-          
-          ### 📦 文件列表
-          ${{ steps.prepare_release.outputs.file_list || '详见下方附件' }}
-          
-          ---
-          
-          *自动生成于 GitHub Actions*
-          
+          ### 安全建议
+          1. 首次登录后立即修改默认密码
+
           ${{ steps.prepare_release.outputs.filelist_text }}
         draft: false
         prerelease: false
