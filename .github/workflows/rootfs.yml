@@ -1,4 +1,4 @@
-name: 🐧 Build RootFS
+name: 🐧 Build RootFS (仅手动触发)
 
 on:
   workflow_dispatch:
@@ -12,16 +12,8 @@ on:
         required: false
         type: boolean
         default: false
-  push:
-    branches: [ master ]
-    tags:
-      - 'v*'
-  pull_request:
-    branches: [ master ]
 
-# 🚨 关键修复：完全移除并发控制，确保手动触发不被取消
-# 删除整个 concurrency 配置块
-
+# 删除 concurrency 配置，因为它不再需要
 # 全局环境变量
 env:
   DEFAULT_KERNEL: '6.18'
