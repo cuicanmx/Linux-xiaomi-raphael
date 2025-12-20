@@ -3,7 +3,7 @@
 set -e
 
 # 导入统一日志库
-source ./logging.sh
+. ./logging.sh
 
 # 检查参数
 check_arguments 2 "$0 <发行版类型-变体> <内核版本>" "$0 debian-server 6.18"

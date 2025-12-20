@@ -3,7 +3,7 @@
 set -e
 
 # 导入统一日志库
-source ./logging.sh
+. ./logging.sh
 
 log_header "小米 Raphael 内核编译脚本"
 log_with_time "$LOG_LEVEL_INFO" "$LOG_TYPE_START" "开始时间: $(date)"
