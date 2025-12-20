@@ -266,21 +266,14 @@ if [ "$distro_variant" = "desktop" ]; then
     chroot rootdir apt -qq update
     
     if [ "$distro_type" = "debian" ]; then
-        echo "🎨 安装Xfce桌面环境..."
-        # 安装完整的Xfce组件，包括会话管理、面板、窗口管理器等
-        if chroot rootdir apt install -qq -y xfce4 xfce4-goodies xfce4-session xfce4-panel xfwm4 xfdesktop4 lightdm xorg xserver-xorg-input-all xserver-xorg-video-all libgl1 libgl1-mesa-dri polkit dbus-x11; then
-            echo "✅ Xfce桌面环境和LightDM显示管理器安装完成 (Debian)"
-            
-            # 配置LightDM默认会话为Xfce
-            echo "🔧 配置LightDM默认会话为Xfce..."
-            mkdir -p rootdir/etc/lightdm
-            cat > rootdir/etc/lightdm/lightdm.conf << EOF
-[Seat:*]
-user-session=xfce
-EOF
-            echo "✅ LightDM默认会话配置完成"
+        echo "🎨 安装GNOME桌面环境..."
+        if chroot rootdir apt install -qq -y task-gnome-desktop; then
+            echo "✅ GNOME桌面环境安装完成 (Debian)"
+            mkdir -p rootdir/var/lib/gdm
+            touch rootdir/var/lib/gdm/run-initial-setup
+            echo "✅ GDM初始配置完成"
         else
-            echo "❌ Xfce桌面环境安装失败"
+            echo "❌ GNOME桌面环境安装失败"
             exit 1
         fi
     elif [ "$distro_type" = "ubuntu" ]; then
@@ -310,18 +303,8 @@ EOF
     
     # 启用显示管理器服务
     if [ "$distro_type" = "debian" ]; then
-        if chroot rootdir systemctl enable lightdm.service; then
-            echo "✅ LightDM显示管理器已启用"
-            # 添加调试信息：检查LightDM服务状态
-            if chroot rootdir systemctl is-enabled lightdm.service >/dev/null; then
-                echo "🔍 LightDM服务已启用"
-            else
-                echo "🔍 LightDM服务未启用"
-            fi
-        else
-            echo "❌ LightDM显示管理器启用失败"
-            exit 1
-        fi
+        # GNOME使用GDM作为显示管理器，已由task-gnome-desktop自动配置
+        echo "✅ GDM显示管理器已自动配置"
     fi
     # 安装ubuntu-desktop元包已包含所有必要的图形组件和服务配置
     
@@ -334,24 +317,9 @@ EOF
         chroot rootdir usermod -aG sudo user
         echo "✅ 普通用户 'user' 创建完成（密码: user）"
         
-        # 根据桌面环境类型配置用户默认会话
+        # Debian和Ubuntu现在都使用GNOME桌面环境
         mkdir -p rootdir/home/user/.config
-        if [ "$distro_type" = "debian" ]; then
-            # Debian使用Xfce
-            cat > rootdir/home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<channel name="xfce4-session" version="1.0">
-  <property name="general" type="empty">
-    <property name="FailsafeSessionName" type="string" value="xfce"/>
-    <property name="SessionName" type="string" value="Default"/>
-  </property>
-</channel>
-EOF
-            echo "✅ 用户Xfce会话配置完成"
-        elif [ "$distro_type" = "ubuntu" ]; then
-            # Ubuntu使用GNOME，无需特别配置会话
-            echo "✅ 用户会话配置完成（GNOME默认）"
-        fi
+        echo "✅ 用户会话配置完成（GNOME默认）"
         # 设置用户权限
         chroot rootdir chown -R user:user /home/user/.config
     else
