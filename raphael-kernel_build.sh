@@ -86,8 +86,21 @@ echo "📋 复制内核文件..."
 cp arch/arm64/boot/Image.gz ../linux-xiaomi-raphael/boot/vmlinuz-$_kernel_version
 echo "✅ 复制内核镜像: vmlinuz-$_kernel_version"
 
-cp arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
-echo "✅ 复制设备树文件: dtb-$_kernel_version"
+# Copy device tree files (try different possible locations)
+echo "🔍 查找设备树文件..."
+if [ -f "arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb" ]; then
+    cp arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb ../linux-xiaomi-raphael/boot/dtb-$_kernel_version
+    echo "✅ 复制设备树文件: dtb-$_kernel_version"
+elif [ -f "arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb.gz" ]; then
+    cp arch/arm64/boot/dts/qcom/sm8150-xiaomi-raphael.dtb.gz ../linux-xiaomi-raphael/boot/dtb-$_kernel_version.gz
+    echo "✅ 复制压缩设备树文件: dtb-$_kernel_version.gz"
+else
+    echo "⚠️  未找到设备树文件，尝试查找其他位置..."
+    find arch/arm64/boot/dts/qcom/ -name "*raphael*" -type f 2>/dev/null | head -5
+    echo "❌ 错误: 未找到设备树文件"
+    echo "💡 请检查设备树配置和编译输出"
+    exit 1
+fi
 
 # Update control file version
 echo "📄 更新 DEBIAN/control 文件..."

@@ -108,10 +108,10 @@ fi
 
 # Mount proc, sys, dev
 echo "🔗 挂载虚拟文件系统..."
-sudo mount -t proc proc rootdir/proc
-sudo mount -t sysfs sysfs rootdir/sys
-sudo mount -o bind /dev rootdir/dev
-sudo mount -o bind /dev/pts rootdir/dev/pts
+sudo mount --bind /dev rootdir/dev
+sudo mount --bind /dev/pts rootdir/dev/pts
+sudo mount --bind /proc rootdir/proc
+sudo mount --bind /sys rootdir/sys
 echo "✅ 虚拟文件系统挂载完成"
 
 # Install base packages
@@ -133,12 +133,38 @@ fi
 
 # Install device-specific packages
 echo "📱 安装设备特定包..."
-if chroot rootdir apt install -y linux-image-arm64 linux-headers-arm64; then
-    echo "✅ 设备包安装完成"
+
+# Copy kernel packages to chroot environment
+echo "📦 复制内核包到 chroot 环境..."
+cp linux-xiaomi-raphael*.deb rootdir/tmp/
+cp firmware-xiaomi-raphael*.deb rootdir/tmp/
+cp alsa-xiaomi-raphael*.deb rootdir/tmp/
+echo "✅ 内核包复制完成"
+
+# Install custom kernel packages
+echo "🔧 安装定制内核包..."
+if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb; then
+    echo "✅ linux-xiaomi-raphael 安装完成"
 else
-    echo "❌ 设备包安装失败"
+    echo "❌ linux-xiaomi-raphael 安装失败"
     exit 1
 fi
+
+if chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb; then
+    echo "✅ firmware-xiaomi-raphael 安装完成"
+else
+    echo "❌ firmware-xiaomi-raphael 安装失败"
+    exit 1
+fi
+
+if chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb; then
+    echo "✅ alsa-xiaomi-raphael 安装完成"
+else
+    echo "❌ alsa-xiaomi-raphael 安装失败"
+    exit 1
+fi
+
+echo "✅ 所有设备特定包安装完成"
 
 # Set root password
 echo "🔐 设置root密码..."
@@ -170,8 +196,8 @@ fi
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
-sudo umount -lf rootdir/proc > /dev/null 2>&1 || true
 sudo umount -lf rootdir/sys > /dev/null 2>&1 || true
+sudo umount -lf rootdir/proc > /dev/null 2>&1 || true
 sudo umount -lf rootdir/dev/pts > /dev/null 2>&1 || true
 sudo umount -lf rootdir/dev > /dev/null 2>&1 || true
 echo "✅ 虚拟文件系统卸载完成"
