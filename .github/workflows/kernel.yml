@@ -59,7 +59,7 @@ jobs:
         env:
           CCACHE_DIR: ~/.ccache
           CCACHE_MAXSIZE: 10G
-          PATH: /usr/lib/ccache:$PATH
+          PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
       - name: "📦 收集编译产物"
         id: collect_artifacts
