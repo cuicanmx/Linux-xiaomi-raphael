@@ -363,9 +363,11 @@ EOF
         chroot rootdir usermod -aG sudo user
         echo "✅ 普通用户 'user' 创建完成（密码: user）"
         
-        # 配置用户默认会话为Xfce
+        # 根据桌面环境类型配置用户默认会话
         mkdir -p rootdir/home/user/.config
-        cat > rootdir/home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml << EOF
+        if [ "$distro_type" = "debian" ]; then
+            # Debian使用Xfce
+            cat > rootdir/home/user/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-session.xml << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <channel name="xfce4-session" version="1.0">
   <property name="general" type="empty">
@@ -374,9 +376,13 @@ EOF
   </property>
 </channel>
 EOF
+            echo "✅ 用户Xfce会话配置完成"
+        elif [ "$distro_type" = "ubuntu" ]; then
+            # Ubuntu使用GNOME，无需特别配置会话
+            echo "✅ 用户会话配置完成（GNOME默认）"
+        fi
         # 设置用户权限
         chroot rootdir chown -R user:user /home/user/.config
-        echo "✅ 用户Xfce会话配置完成"
     else
         echo "⚠️ 用户 'user' 已存在"
     fi
