@@ -1,5 +1,7 @@
 # Ubuntu/Debian for Xiaomi K20 Pro (Raphael)
 
+# 本项目正在测试中，请勿使用
+
 为小米 K20 Pro (代号: Raphael) 构建的 Ubuntu/Debian 系统镜像，支持在手机上运行完整的桌面Linux系统。
 
 ## 📋 项目特性
@@ -31,6 +33,7 @@
    # 进入 Fastboot 模式
    adb reboot bootloader
    
+   # 不支持修改了分区的设备刷机，若你曾安装过windows请你务必恢复原分区表且分区名称也要恢复，否则会导致刷机失败
    # 清除 userdata 分区 (包含系统数据)
    fastboot erase userdata
 
@@ -64,20 +67,6 @@
 
 ## 🔨 构建说明
 
-### 手动构建
-
-**构建内核**:
-```bash
-./raphael-kernel_build.sh 6.18
-```
-
-**构建系统镜像**:
-```bash
-# 参数: <发行版类型> <内核版本>
-./raphael-rootfs_build.sh debian server 6.18
-./raphael-rootfs_build.sh ubuntu desktop 6.18
-```
-
 ### GitHub Actions 构建
 
 项目使用 GitHub Actions 自动化构建：
@@ -105,12 +94,9 @@
 ### 贡献者
 
 特别感谢以下项目的贡献：
+- [@GengWei1997](https://github.com/GengWei1997) - 原项目
 - [@Pc1598](https://github.com/Pc1598) - 提供内核源码
 - [Aospa-raphael-unofficial/linux](https://github.com/Aospa-raphael-unofficial/linux) - 内核项目
-
-## 📄 许可证
-
-本项目基于 GPL-2.0 许可证开源。
 
 ## ⚠️ 免责声明
 
