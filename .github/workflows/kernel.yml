@@ -35,10 +35,12 @@ jobs:
       - name: "💾 设置ccache缓存"
         uses: actions/cache@v4
         with:
-          path: ~/.ccache
-          # 关键修复：缓存键使用动态内核版本，确保不同版本缓存隔离
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.sha }}
+          # 使用明确路径，避免 `~` 可能引起的解析问题
+          path: /home/runner/.ccache
+          # 关键修复：移除 github.sha，使用分支名和脚本哈希，使同一分支的多次构建能共享缓存
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ hashFiles('raphael-kernel_build.sh') }}
           restore-keys: |
+            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-
             ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
             ${{ runner.os }}-ccache-kernel-
 
@@ -46,19 +48,21 @@ jobs:
         run: |
           echo "🚀 开始编译内核版本 ${{ github.event.inputs.kernel_version || '6.18' }}"
           echo "💾 使用 ccache 加速编译"
-          echo "📊 ccache 统计信息:"
-          ccache --show-stats
+          echo "📊 ccache 统计信息 (详情):"
+          ccache --show-stats --verbose
           
           echo "⚙️ 执行编译脚本..."
           # 传递动态版本号给编译脚本
           sudo bash raphael-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}"
           
           echo "✅ 内核编译完成"
-          echo "📊 编译后ccache统计:"
-          ccache --show-stats
+          echo "📊 编译后ccache统计 (详情):"
+          ccache --show-stats --verbose
         env:
-          CCACHE_DIR: ~/.ccache
+          # 统一使用绝对路径，确保与缓存步骤一致
+          CCACHE_DIR: /home/runner/.ccache
           CCACHE_MAXSIZE: 10G
+          # 更精准地设置PATH，确保ccache被优先找到
           PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
       - name: "📦 收集编译产物"
@@ -98,7 +102,7 @@ jobs:
           body: |
             ## 内核版本 ${{ github.event.inputs.kernel_version || '6.18' }}
             
-            📅 构建时间: ${{ github.event.inputs.kernel_version || '6.18' }}
+            📅 构建时间: ${{ fromJSON(github.event).inputs.kernel_version || '6.18' }}
             
             ⚙️ 包含以下包:
             - linux-xiaomi-raphael_*.deb
