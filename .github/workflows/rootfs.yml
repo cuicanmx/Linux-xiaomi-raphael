@@ -1,122 +1,189 @@
-# This is a workflow for building rootfs
-name: rootfs
+name: Build RootFS
 
-# Controls when the workflow will run
 on:
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: "内核版本号"
+        required: true
+        default: "6.18"
+  push:
+    branches:
+      - main
+  pull_request:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # This workflow contains a single job called "build"
-  rootfs:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-24.04-arm
+  build:
+    name: "构建RootFS"
+    runs-on: ubuntu-latest
+    
     strategy:
-            matrix:
-                distro: [debian-server, debian-desktop, ubuntu-server, ubuntu-desktop]
-                kernel: [6.18]
-    # Steps represent a sequence of tasks that will be executed as part of the job
+      matrix:
+        distro: ['debian-server', 'debian-desktop', 'ubuntu-server', 'ubuntu-desktop']
+        include:
+          - distro: debian-server
+            kernel: '6.18'
+          - distro: debian-desktop
+            kernel: '6.18'
+          - distro: ubuntu-server
+            kernel: '6.18'
+          - distro: ubuntu-desktop
+            kernel: '6.18'
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+    - name: "📥 检出代码"
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
-      # Download kernel deb packages from release with tag kernel-6.18
-      - name: Download Kernel DEB Packages from Release
-        run: |
-          mkdir -p xiaomi-raphael-debs_${{ matrix.kernel }}
-          gh release download kernel-${{ matrix.kernel }} \
-            --pattern "*.deb" \
-            --dir xiaomi-raphael-debs_${{ matrix.kernel }} \
-            --repo ${{ github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: "🔧 安装必要工具"
+      run: |
+        echo "⚙️ 安装构建工具..."
+        sudo apt update
+        sudo apt install -y debootstrap qemu-user-static binfmt-support p7zip-full
+        echo "✅ 工具安装完成"
 
-      - name: Install Dependencies
-        run: sudo apt update && sudo apt install -y debootstrap 7zip kmod tar wget
-
-      - name: Build rootfs
-        run: |
-          echo "🚀 开始构建 ${{ matrix.distro }} 发行版，内核版本 ${{ matrix.kernel }}"
-          sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
-          echo "✅ ${{ matrix.distro }} 构建完成"
-
-      - name: Rename rootfs file
-        run: |
-          echo "📝 重命名 rootfs 文件"
-          mv rootfs.7z raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
-          echo "📁 文件已重命名为: raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z"
-
-      - name: Upload rootfs artifact
-        run: |
-          echo "📤 上传构建产物"
-          ls -la raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
+    - name: "📦 下载内核包"
+      run: |
+        echo "📥 正在下载内核包..."
+        echo "🔗 从 Release: kernel-${{ matrix.kernel }} 下载"
         
-      - name: Upload rootfs artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
-          path: raphael-${{ matrix.distro }}-${{ matrix.kernel }}.7z
-          retention-days: 1
+        gh release download kernel-${{ matrix.kernel }} \
+          --pattern "*-xiaomi-raphael*.deb" \
+          --repo "${{ github.repository }}"
+        
+        echo "✅ 内核包下载完成"
+        echo "📁 当前目录文件:"
+        ls -la *.deb
+        
+        # Verify downloads
+        DEB_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
+        echo "📦 下载了 $DEB_COUNT 个内核包"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  create-release:
-    needs: rootfs
-    runs-on: ubuntu-24.04-arm
+    - name: "🏗️ 构建rootfs"
+      run: |
+        echo "🚀 开始构建 ${{ matrix.distro }} 发行版"
+        echo "📋 配置:"
+        echo "  - 发行版: ${{ matrix.distro }}"
+        echo "  - 内核版本: ${{ matrix.kernel }}"
+        echo "  - 工作目录: $(pwd)"
+        
+        echo "⚙️ 执行构建脚本..."
+        sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
+        
+        echo "✅ ${{ matrix.distro }} 构建完成"
+      timeout-minutes: 60
+
+    - name: "📤 上传产物"
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.distro }}-${{ matrix.kernel }}
+        path: "*.7z"
+        retention-days: 7
+
+    - name: "📋 单任务总结"
+      if: always()
+      run: |
+        echo "📊 === 任务 ${{ matrix.distro }} 完成 ==="
+        echo "🎯 目标: ${{ matrix.distro }}"
+        echo "📦 内核: ${{ matrix.kernel }}"
+        echo "📁 产物: *.7z"
+        echo "⏱️  状态: ${{ job.status }}"
+        echo "==========================="
+
+  release:
+    name: "📦 创建Release"
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
     steps:
-      - name: Download all rootfs artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
+    - name: "📥 检出代码"
+      uses: actions/checkout@v4
 
-      - name: List downloaded artifacts
-        run: |
-          echo "📥 已下载的构建产物:"
-          ls -la artifacts/
-          echo ""
-          echo "🔍 检查产物目录结构:"
-          find artifacts -type f -name "*.7z" | head -10
+    - name: "📦 下载所有产物"
+      run: |
+        echo "🔍 下载所有构建产物..."
+        
+        # Create artifacts directory
+        mkdir -p artifacts
+        
+        # Download all artifacts
+        echo "📥 正在下载所有构建产物..."
+        gh run download ${{ github.run_id }} \
+          --repo "${{ github.repository }}" \
+          --dir artifacts
+        
+        echo "✅ 所有产物下载完成"
+        echo "📁 artifacts目录内容:"
+        find artifacts -type f -name "*.7z"
+        
+        ARTIFACT_COUNT=$(find artifacts -type f -name "*.7z" | wc -l)
+        echo "📦 共找到 $ARTIFACT_COUNT 个rootfs文件"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Find and copy .7z files
-        run: |
-          echo "🔎 查找 .7z 文件"
-          find artifacts -name "*.7z" -type f -exec cp {} . \;
-          echo "✅ .7z 文件已复制到当前目录"
+    - name: "🔎 查找并复制.7z文件"
+      run: |
+        echo "🔍 查找 .7z 文件..."
+        
+        # Find and copy .7z files
+        find artifacts -name "*.7z" -type f -exec cp {} . \;
+        
+        echo "✅ .7z 文件已复制到当前目录"
+        
+        echo "📁 当前目录下的文件:"
+        ls -la *.7z
+        
+        echo ""
+        echo "📊 文件统计:"
+        du -h *.7z
+        
+        FILE_COUNT=$(ls -1 *.7z 2>/dev/null | wc -l)
+        echo "📦 准备上传 $FILE_COUNT 个文件"
+
+    - name: "🏷️ 创建Release"
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: rootfs
+        name: "RootFS 镜像集合"
+        body: |
+          ## RootFS 镜像集合
           
-          echo "📁 当前目录下的文件:"
-          ls -la *.7z
-          echo ""
-          echo "📊 文件统计:"
-          du -h *.7z
+          📅 构建时间: ${{ github.run_created_at }}
+          
+          🖥️ 包含以下发行版:
+          - Debian Server
+          - Debian Desktop (Xfce)
+          - Ubuntu Server  
+          - Ubuntu Desktop
+          
+          ⚙️ 内核版本: ${{ fromJSON(github.event).inputs.kernel_version || '6.18' }}
+          
+          🔐 默认root密码: 1234
+          
+          🐛 自动构建于 GitHub Actions
+          
+          ### 文件列表:
+          ${{ steps.find_files.outputs.file_list }}
+        draft: false
+        prerelease: false
+        files: "*.7z"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create and Upload RootFS Release
-        run: |
-          echo "🚀 准备创建 GitHub Release"
-          echo "🏷️  Release 标签: rootfs"
-          echo "📦 要上传的文件:"
-          ls -la *.7z
-          echo ""
-          echo "👩‍💼 开始创建 Release..."
-        
-      - name: Create and Upload RootFS Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: rootfs
-          name: RootFS Build ${{ github.sha }}
-          body: |
-            RootFS for Xiaomi Raphael with multiple distributions and Kernel ${{ matrix.kernel }}
-            
-            Built from commit: ${{ github.sha }}
-            
-            Available distributions:
-            - debian-server
-            - debian-desktop (Xfce)
-            - ubuntu-server
-            - ubuntu-desktop
-            
-            Features:
-            - Optimized for Xiaomi Raphael device
-            - Includes kernel ${{ matrix.kernel }} and necessary drivers
-            - Root password: 1234
-          files: "*.7z"
-          draft: false
-          prerelease: false
+    - name: "📋 发布总结"
+      if: always()
+      run: |
+        echo "📊 ======== 发布总结 ========"
+        echo "🏗️  工作流: ${{ github.workflow }}"
+        echo "🎯 Release: rootfs"
+        echo "📦 文件数量: $FILE_COUNT"
+        echo "⏱️  运行时间: ${{ job.status }}"
+        echo "==========================="

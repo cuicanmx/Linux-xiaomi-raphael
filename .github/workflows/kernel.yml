@@ -1,114 +1,127 @@
-# This is a workflow for building kernel with caching
-name: kernel
+name: Build Kernel
 
-# Controls when the workflow will run
 on:
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      kernel_version:
+        description: "内核版本号"
+        required: true
+        default: "6.18"
+  push:
+    branches:
+      - main
+  pull_request:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # This workflow contains a single job called "build"
-  kernel:
-    runs-on: ubuntu-24.04-arm
+  build:
+    name: "构建内核 v${{ inputs.kernel_version || '6.18' }}"
+    runs-on: ubuntu-latest
+    
     strategy:
-            matrix:
-                version: [6.18]
-    # Steps represent a sequence of tasks that will be executed as part of the job
+      matrix:
+        version: ['6.18']
+
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+    - name: "📥 检出代码"
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: "🔧 设置构建环境"
+      run: |
+        echo "⚙️ 正在安装必要的构建工具..."
+        sudo apt update
+        sudo apt install -y build-essential flex bison libssl-dev libelf-dev bc ccache
+        echo "✅ 构建工具安装完成"
         
-      - name: Install Dependencies
-        run: |
-          echo "📦 安装内核编译依赖包"
-          sudo apt update
-          sudo apt install -y build-essential gcc-aarch64-linux-gnu bc flex bison 7zip kmod bash cpio binutils tar git wget dpkg libssl-dev ccache
-          echo "✅ 依赖包安装完成"
+        echo "📦 检查ccache状态..."
+        ccache --version
+        ccache --max-size=10G
+        ccache --show-stats
 
-      - name: Cache ccache directory
-        uses: actions/cache@v3
-        id: cache-ccache
-        with:
-          path: ~/.ccache
-          key: kernel-ccache-${{ matrix.version }}-${{ runner.os }}
-          restore-keys: |
-            kernel-ccache-${{ matrix.version }}-${{ runner.os }}
-            kernel-ccache-${{ matrix.version }}
+    - name: "💾 设置ccache缓存"
+      uses: actions/cache@v4
+      with:
+        path: ~/.ccache
+        key: ${{ runner.os }}-ccache-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-ccache-
 
-      - name: Setup ccache environment
-        run: |
-          echo "⚙️  设置 ccache 编译缓存"
-          mkdir -p ~/.ccache
-          echo "max_size = 10.0G" > ~/.ccache/ccache.conf
-          echo "compression = true" >> ~/.ccache/ccache.conf
-          echo "compression_level = 6" >> ~/.ccache/ccache.conf
-          echo "📊 ccache 配置完成，缓存大小: 10GB"
-
-      - name: Build kernel with ccache
-        run: |
-          echo "🔨 开始编译内核版本 ${{ matrix.version }}"
-          echo "💾 使用 ccache 加速编译"
-          sh raphael-kernel_build.sh ${{ matrix.version }}
-          echo "✅ 内核编译完成"
-        env:
-            CCACHE_DIR: ~/.ccache
-            CCACHE_MAXSIZE: 10G
-            PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-
-      - name: List build artifacts
-        run: |
-          echo "📁 编译产物列表:"
-          ls -la *.deb || echo "⚠️  未找到 .deb 文件"
-          echo ""
-          echo "📊 文件大小统计:"
-          du -h *.deb 2>/dev/null || echo "暂无产物文件"
-
-      - name: Create Release
-        run: |
-          echo "🚀 准备创建内核 Release"
-          echo "🏷️  Release 标签: kernel-${{ matrix.version }}"
-          echo "📦 要上传的内核包:"
-          ls -la *.deb 2>/dev/null || echo "无内核包文件"
-          echo ""
-          echo "👨‍💻 开始创建内核 Release..."
+    - name: "🔨 编译内核"
+      run: |
+        echo "🚀 开始编译内核版本 ${{ matrix.version }}"
+        echo "💾 使用 ccache 加速编译"
+        echo "📊 ccache 统计信息:"
+        ccache --show-stats
         
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        if: always()
-        with:
-          tag_name: kernel-${{ matrix.version }}
-          name: Kernel ${{ matrix.version }}
-          body: |
-            Kernel ${{ matrix.version }} for Xiaomi Raphael
-            
-            Built from commit: ${{ github.sha }}
-            
-            Features:
-            - Optimized for Xiaomi Raphael device
-            - Includes necessary drivers and firmware
-            - Compatible with Ubuntu/Debian rootfs
-          files: "*.deb"
-          draft: false
-          prerelease: false
+        echo "⚙️ 执行编译脚本..."
+        sh raphael-kernel_build.sh ${{ matrix.version }}
+        
+        echo "✅ 内核编译完成"
+        echo "📊 编译后ccache统计:"
+        ccache --show-stats
+      env:
+        CCACHE_DIR: ~/.ccache
+        CCACHE_MAXSIZE: 10G
+        PATH: /usr/lib/ccache:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-      - name: Upload DEB Packages to Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            linux-xiaomi-raphael.deb
-            firmware-xiaomi-raphael.deb
-            alsa-xiaomi-raphael.deb
-          tag_name: kernel-${{ matrix.version }}
-          name: Kernel ${{ matrix.version }}
-          body: |
-            Kernel ${{ matrix.version }} for Xiaomi Raphael
-            
-            Built from commit: ${{ github.sha }}
-            
-            Features:
-            - Optimized for Xiaomi Raphael device
-            - Includes necessary drivers and firmware
-            - Compatible with Ubuntu/Debian rootfs
-          draft: false
-          prerelease: false
+    - name: "📦 收集编译产物"
+      run: |
+        echo "🔍 查找编译产物..."
+        find . -name "*.deb" -type f | head -20
+        
+        echo "📁 编译产物列表:"
+        ls -la *.deb || echo "⚠️  未找到 .deb 文件"
+        echo ""
+        echo "📊 文件大小统计:"
+        du -h *.deb 2>/dev/null || echo "暂无产物文件"
+        
+        # Count packages
+        PKG_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
+        echo "📦 共找到 $PKG_COUNT 个包文件"
+
+    - name: "📤 上传产物"
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-${{ matrix.version }}
+        path: "*.deb"
+        retention-days: 7
+
+    - name: "🏷️ 创建Release"
+      if: github.event_name == 'workflow_dispatch'
+      id: create_release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: kernel-${{ matrix.version }}
+        name: "Kernel ${{ matrix.version }}"
+        body: |
+          ## 内核版本 ${{ matrix.version }}
+          
+          📅 构建时间: ${{ fromJSON(github.event).inputs.kernel_version || matrix.version }}
+          
+          ⚙️ 包含以下包:
+          - linux-xiaomi-raphael_${{ matrix.version }}*.deb
+          - firmware-xiaomi-raphael_${{ matrix.version }}*.deb
+          - alsa-xiaomi-raphael_${{ matrix.version }}*.deb
+          
+          🐛 自动构建于 GitHub Actions
+        draft: false
+        prerelease: false
+        files: "*.deb"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: "📋 构建总结"
+      if: always()
+      run: |
+        echo "📊 ======== 构建总结 ========"
+        echo "🏗️  工作流: ${{ github.workflow }}"
+        echo "🎯 目标版本: ${{ matrix.version }}"
+        echo "📁 产物数量: $PKG_COUNT"
+        echo "⏱️  运行时间: ${{ job.status }}"
+        echo "==========================="

@@ -1,129 +1,150 @@
-#!/bin/sh
+#!/bin/bash
 
-# if [ "$(id -u)" -ne 0 ]
-# then
-#   echo "rootfs can only be built as root"
-#   exit
-# fi
+set -e
 
-# Parse distribution and version
-distro_type=$(echo $1 | cut -d'-' -f1)
-distro_variant=$(echo $1 | cut -d'-' -f2)
-
-truncate -s 6G rootfs.img
-mkfs.ext4 rootfs.img
-mkdir rootdir
-mount -o loop rootfs.img rootdir
-
-# Choose base system based on distribution
-case "$distro_type" in
-    "debian")
-        debootstrap --arch=arm64 trixie rootdir http://deb.debian.org/debian/
-        ;;
-    "ubuntu")
-        debootstrap --arch=arm64 noble rootdir http://ports.ubuntu.com/ubuntu-ports/
-        ;;
-    *)
-        echo "Unsupported distribution: $distro_type"
-        exit 1
-        ;;
-esac
-mount --bind /dev rootdir/dev
-mount --bind /dev/pts rootdir/dev/pts
-mount --bind /proc rootdir/proc
-mount --bind /sys rootdir/sys
-
-echo "nameserver 1.1.1.1" | tee rootdir/etc/resolv.conf
-echo "xiaomi-raphael" | tee rootdir/etc/hostname
-echo "127.0.0.1 localhost
-127.0.1.1 xiaomi-raphael" | tee rootdir/etc/hosts
-
-#chroot installation
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$PATH
-export DEBIAN_FRONTEND=noninteractive
-
-chroot rootdir apt update
-chroot rootdir apt upgrade -y
-
-#u-boot-tools breaks grub installation
-chroot rootdir apt install -y bash-completion sudo apt-utils ssh openssh-server nano initramfs-tools chrony curl wget u-boot-tools-
-
-# Install systemd-boot only for Debian
-if [ "$distro_type" = "debian" ]; then
-    chroot rootdir apt install -y systemd-boot
+# Check arguments
+if [ $# -ne 2 ]; then
+    echo "❌ 用法错误: $0 <发行版类型-变体> <内核版本>"
+    echo "   示例: $0 debian-server 6.18"
+    exit 1
 fi
 
-#Device specific packages (install if available)
-chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv || true
+echo "🚀 开始构建 $1 发行版，内核版本 $2"
+echo "📋 参数检查: distro=$1, kernel=$2"
 
-#Remove check for "*-laptop" if pd-mapper.service exists
-if [ -f "rootdir/lib/systemd/system/pd-mapper.service" ]; then
-    sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
+distro_type=$(echo "$1" | cut -d'-' -f1)
+distro_variant=$(echo "$1" | cut -d'-' -f2)
+distro_version=$(echo "$1" | cut -d'-' -f3)
+
+echo "🔍 解析发行版信息:"
+echo "  类型: $distro_type"
+echo "  变体: $distro_variant"
+echo "  版本: $distro_version"
+echo "  内核: $2"
+
+# Check required kernel packages
+echo "📦 检查内核包文件..."
+kernel_packages=("linux-xiaomi-raphael_$2*.deb" "firmware-xiaomi-raphael_$2*.deb" "alsa-xiaomi-raphael_$2*.deb")
+missing_packages=()
+
+for pkg in "${kernel_packages[@]}"; do
+    if ls $pkg 1> /dev/null 2>&1; then
+        echo "✅ 找到: $pkg"
+    else
+        missing_packages+=("$pkg")
+        echo "❌ 未找到: $pkg"
+    fi
+done
+
+if [ ${#missing_packages[@]} -gt 0 ]; then
+    echo "❌ 错误: 缺少必需的内核包: ${missing_packages[*]}"
+    echo "💡 请确保在工作流中正确下载了内核包"
+    exit 1
 fi
 
-# Set root password to 1234
-echo 'root:1234' | chroot rootdir chpasswd
+echo "✅ 所有必需的内核包已就绪"
 
-# Enable SSH for server variants
-if [ "$distro_variant" = "server" ]; then
-    chroot rootdir systemctl enable ssh
+# Clean up old rootfs
+echo "🧹 清理旧的rootfs目录..."
+if [ -d "rootdir" ]; then
+    rm -rf rootdir
+    echo "✅ 旧目录已清理"
 fi
+
+# Create rootfs directory
+echo "📁 创建rootfs目录结构..."
+mkdir -p rootdir
+echo "✅ 目录结构创建完成"
+
+# Bootstrap the rootfs
+echo "🌱 开始引导系统 (debootstrap)..."
+echo "📥 下载: $distro_type $distro_version"
+if sudo debootstrap --arch=arm64 --components=main,contrib,non-free,non-free-firmware "$distro_version" rootdir "http://deb.debian.org/debian/"; then
+    echo "✅ 系统引导完成"
+else
+    echo "❌ debootstrap 失败"
+    exit 1
+fi
+
+# Mount proc, sys, dev
+echo "🔗 挂载虚拟文件系统..."
+sudo mount -t proc proc rootdir/proc
+sudo mount -t sysfs sysfs rootdir/sys
+sudo mount -o bind /dev rootdir/dev
+sudo mount -o bind /dev/pts rootdir/dev/pts
+echo "✅ 虚拟文件系统挂载完成"
+
+# Install base packages
+echo "📦 安装基础系统包..."
+if chroot rootdir apt update; then
+    echo "✅ 软件包列表更新完成"
+else
+    echo "❌ 软件包列表更新失败"
+    exit 1
+fi
+
+echo "🔧 安装系统工具包..."
+if chroot rootdir apt install -y systemd systemd-sysv init udev dbus; then
+    echo "✅ 系统工具包安装完成"
+else
+    echo "❌ 系统工具包安装失败"
+    exit 1
+fi
+
+# Install device-specific packages
+echo "📱 安装设备特定包..."
+if chroot rootdir apt install -y linux-image-arm64 linux-headers-arm64; then
+    echo "✅ 设备包安装完成"
+else
+    echo "❌ 设备包安装失败"
+    exit 1
+fi
+
+# Set root password
+echo "🔐 设置root密码..."
+echo -e "1234\n1234" | sudo chroot rootdir passwd root > /dev/null 2>&1
+echo "✅ Root密码已设置为: 1234"
 
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
+    echo "🖥️ 安装桌面环境..."
     chroot rootdir apt update
     if [ "$distro_type" = "debian" ]; then
-        chroot rootdir apt install -y xfce4 xfce4-goodies
-        echo "✅ Xfce桌面环境安装完成 (Debian)"
+        echo "🎨 安装Xfce桌面环境..."
+        if chroot rootdir apt install -y xfce4 xfce4-goodies; then
+            echo "✅ Xfce桌面环境安装完成 (Debian)"
+        else
+            echo "❌ Xfce桌面环境安装失败"
+            exit 1
+        fi
     elif [ "$distro_type" = "ubuntu" ]; then
-        chroot rootdir apt install -y ubuntu-desktop-minimal
-        echo "✅ Ubuntu桌面环境安装完成"
+        echo "🎨 安装Ubuntu桌面环境..."
+        if chroot rootdir apt install -y ubuntu-desktop-minimal; then
+            echo "✅ Ubuntu桌面环境安装完成"
+        else
+            echo "❌ Ubuntu桌面环境安装失败"
+            exit 1
+        fi
     fi
 fi
 
-# Copy kernel packages to rootfs
-if [ -d "xiaomi-raphael-debs_$2" ]; then
-    cp xiaomi-raphael-debs_$2/*-xiaomi-raphael.deb rootdir/tmp/
+# Unmount filesystems
+echo "🔓 卸载虚拟文件系统..."
+sudo umount -lf rootdir/proc > /dev/null 2>&1 || true
+sudo umount -lf rootdir/sys > /dev/null 2>&1 || true
+sudo umount -lf rootdir/dev/pts > /dev/null 2>&1 || true
+sudo umount -lf rootdir/dev > /dev/null 2>&1 || true
+echo "✅ 虚拟文件系统卸载完成"
+
+# Create 7z archive
+echo "🗜️ 创建压缩包..."
+output_file="raphael-${distro_type}-${distro_variant}-$2.7z"
+if sudo 7z a -t7z -m0=lzma -mx=9 -mfb=64 -md=32m -ms=on "${output_file}" rootdir/; then
+    echo "✅ 压缩包创建成功: ${output_file}"
+    echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
 else
-    cp *-xiaomi-raphael.deb rootdir/tmp/
+    echo "❌ 压缩包创建失败"
+    exit 1
 fi
 
-# Install kernel packages
-chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb || true
-chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb || true
-
-# Install alsa package with dependency resolution
-if [ "$distro_type" = "debian" ]; then
-    chroot rootdir apt install -y alsa-ucm-conf
-elif [ "$distro_type" = "ubuntu" ]; then
-    chroot rootdir apt install -y alsa-ucm-conf || chroot rootdir apt install -y alsa-base
-fi
-chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb || true
-
-# Clean up kernel packages
-rm -f rootdir/tmp/*-xiaomi-raphael.deb
-chroot rootdir update-initramfs -c -k all
-chroot rootdir rm -rf /boot/dtbs/qcom/
-chroot rootdir bash -c "$(curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/ghproxy-Update-kernel.sh)"
-
-#create fstab!
-echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
-PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
-
-mkdir rootdir/var/lib/gdm
-touch rootdir/var/lib/gdm/run-initial-setup
-chroot rootdir apt clean
-
-umount rootdir/sys
-umount rootdir/proc
-umount rootdir/dev/pts
-umount rootdir/dev
-umount rootdir
-
-rm -d rootdir
-
-tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img
-
-echo 'cmdline for legacy boot: "root=PARTLABEL=userdata"'
-
-7z a rootfs.7z rootfs.img
+echo "🎉 $distro_type-$distro_variant 构建完成！"
