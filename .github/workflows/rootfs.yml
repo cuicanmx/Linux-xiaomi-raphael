@@ -242,8 +242,8 @@ jobs:
           ## 🐧 RootFS 系统镜像
           
           ### 📋 构建信息
-          - **构建时间**: ${{ fromJSON(github.event).inputs.kernel_version || env.DEFAULT_KERNEL }}
-          - **内核版本**: ${{ fromJSON(github.event).inputs.kernel_version || env.DEFAULT_KERNEL }}
+          - **构建时间**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
+          - **内核版本**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
           - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
           - **包含变体**: Debian Server/Desktop, Ubuntu Server/Desktop
           
