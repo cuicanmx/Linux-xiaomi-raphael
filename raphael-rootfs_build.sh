@@ -9,6 +9,12 @@ if [ $# -ne 2 ]; then
     exit 1
 fi
 
+# Check if running as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "❌ rootfs can only be built as root"
+    exit 1
+fi
+
 echo "🚀 开始构建 $1 发行版，内核版本 $2"
 echo "📋 参数检查: distro=$1, kernel=$2"
 
@@ -18,7 +24,7 @@ distro_variant=$(echo "$1" | cut -d'-' -f2)
 
 # Set default version based on distribution type
 if [ "$distro_type" = "debian" ]; then
-    distro_version="trixie"  # Debian 12 (trixie)
+    distro_version="trixie"  # Debian 13 (trixie)
 elif [ "$distro_type" = "ubuntu" ]; then
     distro_version="noble"   # Ubuntu 24.04 (noble)
 else
@@ -73,17 +79,30 @@ fi
 
 echo "✅ 所有必需的内核包已就绪 ($found_packages/3)"
 
-# Clean up old rootfs
-echo "🧹 清理旧的rootfs目录..."
+# Clean up old rootfs and image
+echo "🧹 清理旧的rootfs和镜像文件..."
 if [ -d "rootdir" ]; then
+    umount rootdir/sys 2>/dev/null || true
+    umount rootdir/proc 2>/dev/null || true
+    umount rootdir/dev/pts 2>/dev/null || true
+    umount rootdir/dev 2>/dev/null || true
+    umount rootdir 2>/dev/null || true
     rm -rf rootdir
     echo "✅ 旧目录已清理"
 fi
 
-# Create rootfs directory
-echo "📁 创建rootfs目录结构..."
+if [ -f "rootfs.img" ]; then
+    rm -f rootfs.img
+    echo "✅ 旧镜像文件已清理"
+fi
+
+# Create and mount image file
+echo "📁 创建IMG镜像文件..."
+truncate -s 6G rootfs.img
+mkfs.ext4 rootfs.img
 mkdir -p rootdir
-echo "✅ 目录结构创建完成"
+mount -o loop rootfs.img rootdir
+echo "✅ 6GB镜像文件创建并挂载完成"
 
 # Bootstrap the rootfs
 echo "🌱 开始引导系统 (debootstrap)..."
@@ -166,10 +185,31 @@ fi
 
 echo "✅ 所有设备特定包安装完成"
 
+# Create fstab
+echo "📋 创建文件系统表..."
+echo "PARTLABEL=linux / ext4 errors=remount-ro,x-systemd.growfs 0 1
+PARTLABEL=esp /boot/efi vfat umask=0077 0 1" | tee rootdir/etc/fstab
+
+# Create GDM directory
+mkdir -p rootdir/var/lib/gdm
+touch rootdir/var/lib/gdm/run-initial-setup
+
+# Clean package cache
+echo "🧹 清理软件包缓存..."
+chroot rootdir apt clean
+
 # Set root password
 echo "🔐 设置root密码..."
 echo -e "1234\n1234" | sudo chroot rootdir passwd root > /dev/null 2>&1
 echo "✅ Root密码已设置为: 1234"
+
+# Network and system configuration
+echo "🔧 配置网络和系统设置..."
+echo "nameserver 223.5.5.5" | tee rootdir/etc/resolv.conf
+echo "xiaomi-raphael" | tee rootdir/etc/hostname
+echo "127.0.0.1 localhost
+127.0.1.1 xiaomi-raphael" | tee rootdir/etc/hosts
+echo "✅ 网络和主机名配置完成"
 
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
@@ -200,12 +240,17 @@ umount rootdir/sys
 umount rootdir/proc
 umount rootdir/dev/pts
 umount rootdir/dev
+umount rootdir
 echo "✅ 虚拟文件系统卸载完成"
+
+# Clean up directory
+rm -d rootdir
+echo "✅ 临时目录清理完成"
 
 # Create 7z archive
 echo "🗜️ 创建压缩包..."
 output_file="raphael-${distro_type}-${distro_variant}-$2.7z"
-if sudo 7z a -t7z -m0=lzma -mx=9 -mfb=64 -md=32m -ms=on "${output_file}" rootdir/; then
+if 7z a "${output_file}" rootfs.img; then
     echo "✅ 压缩包创建成功: ${output_file}"
     echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
 else
@@ -213,4 +258,5 @@ else
     exit 1
 fi
 
-echo "🎉 $distro_type-$distro_variant 构建完成！"
+echo "🎉 $distro_type-$distro_variant IMG镜像构建完成！"
+echo "💡 引导命令行: root=PARTLABEL=linux"
