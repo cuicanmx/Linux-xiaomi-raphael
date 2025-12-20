@@ -75,7 +75,7 @@ jobs:
         echo "  - 工作目录: $(pwd)"
         
         echo "⚙️ 执行构建脚本..."
-        sudo sh raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
+        sudo bash raphael-rootfs_build.sh ${{ matrix.distro }} ${{ matrix.kernel }}
         
         echo "✅ ${{ matrix.distro }} 构建完成"
       timeout-minutes: 60
