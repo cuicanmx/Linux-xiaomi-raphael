@@ -329,43 +329,27 @@ if [ "$distro_variant" = "desktop" ]; then
     # 添加完整的图形系统状态检查
     echo "🔍 图形系统状态检查..."
     
-    # 检查关键图形服务状态
-    if [ "$distro_type" = "debian" ]; then
-        echo "📋 Debian图形服务状态检查:"
-        # 检查LightDM服务状态
-        if chroot rootdir systemctl is-enabled lightdm.service >/dev/null; then
-            echo "   ✅ LightDM服务已启用"
-        else
-            echo "   ❌ LightDM服务未启用"
-        fi
-        # 检查DBus服务状态
-        if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
-            echo "   ✅ DBus服务已启用"
-        else
-            echo "   ❌ DBus服务未启用"
-        fi
-    elif [ "$distro_type" = "ubuntu" ]; then
-        echo "📋 Ubuntu图形服务状态检查:"
-        # 检查GDM3服务状态
-        if chroot rootdir systemctl is-enabled gdm3.service >/dev/null; then
-            echo "   ✅ GDM3服务已启用"
-        else
-            echo "   ❌ GDM3服务未启用"
-        fi
-        # 检查DBus服务状态
-        if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
-            echo "   ✅ DBus服务已启用"
-        else
-            echo "   ❌ DBus服务未启用"
-        fi
+    # 检查关键图形服务状态 - 两个发行版现在都使用GDM
+    echo "📋 图形服务状态检查:"
+    # 检查GDM/GDM3服务状态
+    if chroot rootdir systemctl is-enabled gdm.service || chroot rootdir systemctl is-enabled gdm3.service; then
+        echo "   ✅ GDM服务已启用"
+    else
+        echo "   ❌ GDM服务未启用"
+    fi
+    # 检查DBus服务状态
+    if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
+        echo "   ✅ DBus服务已启用"
+    else
+        echo "   ❌ DBus服务未启用"
     fi
     
-    # 检查Xfce会话配置
-    echo "📋 Xfce会话配置检查:"
-    if chroot rootdir dpkg -l | grep -q xfce4-session; then
-        echo "   ✅ Xfce会话管理器已安装"
+    # 检查GNOME会话配置
+    echo "📋 GNOME会话配置检查:"
+    if chroot rootdir dpkg -l | grep -q gnome-session; then
+        echo "   ✅ GNOME会话管理器已安装"
     else
-        echo "   ❌ Xfce会话管理器未安装"
+        echo "   ❌ GNOME会话管理器未安装"
     fi
     
     # 检查默认启动目标
