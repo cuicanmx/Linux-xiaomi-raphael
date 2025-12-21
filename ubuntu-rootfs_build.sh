@@ -153,7 +153,7 @@ base_packages=(
     # 网络基础（强制DHCP+WiFi）
     systemd-resolved wpasupplicant iw iproute2 sudo
     # SSH依赖
-    openssh-server openssh-client ntpdate
+    openssh-server openssh-client chrony ubuntu-server
     # 基础工具
     sudo vim wget curl iputils-ping
     # WiFi配置工具
