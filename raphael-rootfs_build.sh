@@ -165,7 +165,7 @@ base_packages=(
     # WiFi配置工具
     network-manager wireless-regdb 
     # 音频/硬件兼容
-    alsa-ucm-conf alsa-utils 
+    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools
 )
 
 echo "执行命令: chroot rootdir apt install -qq -y ${base_packages[*]}"
@@ -293,6 +293,7 @@ chroot rootdir systemctl enable systemd-resolved
 
 echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
+chroot rootdir update-initramfs -c -k all
 
 # Create fstab
 echo "📋 创建文件系统表..."
