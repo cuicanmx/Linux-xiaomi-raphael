@@ -23,6 +23,12 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# 确保使用bash运行脚本
+if [ -z "$BASH_VERSION" ]; then
+    echo "错误: 请使用bash运行此脚本"
+    exit 1
+fi
+
 echo ""
 echo "=========================================="
 echo "开始构建 $1 发行版，内核版本 $2"
@@ -139,7 +145,7 @@ mount -t sysfs sys rootdir/sys
 echo "虚拟文件系统挂载完成"
 
 # Update package list
-echo "� 更新软件包列表..."
+echo "🔄 更新软件包列表..."
 if chroot rootdir apt update; then
     echo "✅ 软件包列表更新完成"
 else
