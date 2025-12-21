@@ -103,16 +103,16 @@ if [ -f "rootfs.img" ]; then
 fi
 
 # Create and mount image file
-echo "创建IMG镜像文件..."
+echo "📁 创建IMG镜像文件..."
 truncate -s 6G rootfs.img
 mkfs.ext4 rootfs.img
 mkdir -p rootdir
 mount -o loop rootfs.img rootdir
-echo "6GB镜像文件创建并挂载完成"
+echo "✅ 6GB镜像文件创建并挂载完成"
 
 # Bootstrap the rootfs
-echo "开始引导系统 (debootstrap)..."
-echo "下载: $distro_type $distro_version"
+echo "🌱 开始引导系统 (debootstrap)..."
+echo "📥 下载: $distro_type $distro_version"
 
 # Set mirror based on distribution type
  if [ "$distro_type" = "debian" ]; then
@@ -121,7 +121,7 @@ echo "下载: $distro_type $distro_version"
      mirror="http://ports.ubuntu.com/ubuntu-ports/"
  fi
 
-echo "使用镜像源: $mirror"
+echo "🔗 使用镜像源: $mirror"
 
 if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
     echo "✅ 系统引导完成"
@@ -140,9 +140,9 @@ mount -t sysfs sys rootdir/sys
 
 echo "虚拟文件系统挂载完成"
 
-# Install base packages
-echo "📦 安装基础系统包..."
-if chroot rootdir apt -qq update; then
+# Update package list
+echo "� 更新软件包列表..."
+if chroot rootdir apt update; then
     echo "✅ 软件包列表更新完成"
 else
     echo "❌ 软件包列表更新失败"
