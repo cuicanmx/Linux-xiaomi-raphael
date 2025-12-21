@@ -125,7 +125,7 @@ echo "🔗 使用镜像源: $mirror"
 echo "🔗 使用镜像源: $mirror"
 
 echo "执行命令: sudo debootstrap --arch=arm64 $distro_version rootdir $mirror"
-if sudo debootstrap --arch=arm64 -–variant "$distro_version" rootdir "$mirror"; then
+if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
     echo "✅ 系统引导完成"
 else
     echo "❌ debootstrap 失败"
