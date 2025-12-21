@@ -45,11 +45,12 @@ ntpdate pool.ntp.org
 
 ### GitHub Actions 构建
 
-项目使用 GitHub Actions 自动化构建：
+项目使用 GitHub Actions 自动化构建，已分解为独立的 Debian 和 Ubuntu 工作流：
 
 1. **内核构建**: 手动触发 `Build Kernel` 工作流
-2. **系统镜像构建**: 手动触发 `Build RootFS` 工作流
-3. **发布管理**: 构建完成后自动创建 Release
+2. **Debian 系统镜像构建**: 手动触发 `Build Debian RootFS` 工作流
+3. **Ubuntu 系统镜像构建**: 手动触发 `Build Ubuntu RootFS` 工作流
+4. **发布管理**: 每个构建完成后自动创建独立的 Release
 
 ## ⚙️ 技术细节
 ### 关闭屏幕
