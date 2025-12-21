@@ -51,9 +51,10 @@ jobs:
           # 优化ccache配置
           ccache --set-config=max_size=10G
           ccache --set-config=cache_dir=/home/runner/.ccache
-          ccache --set-config=compress=1
           ccache --set-config=sloppiness=file_macro,locale,time_macros
-          ccache --set-config=compression_level=6
+          # 兼容旧版本ccache，不使用compress选项
+          # ccache --set-config=compress=1
+          # ccache --set-config=compression_level=6
           
           echo "📊 缓存恢复状态: ${{ steps.cache-ccache.outputs.cache-hit }}"
           ccache --show-stats
