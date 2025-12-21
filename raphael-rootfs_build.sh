@@ -155,7 +155,7 @@ fi
 echo "📦 安装核心基础包"
 base_packages=(
     # 系统核心
-    systemd udev dbus bash-completion systemd-networkd
+    systemd udev dbus bash-completion net-tools
     # 网络基础（强制DHCP+WiFi）
     systemd-resolved wpasupplicant iw iproute2 sudo
     # SSH依赖
