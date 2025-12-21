@@ -117,11 +117,11 @@ echo "开始引导系统 (debootstrap)..."
 echo "下载: $distro_type $distro_version"
 
 # Set mirror based on distribution type
-if [ "$distro_type" = "debian" ]; then
-    mirror="http://deb.debian.org/debian/"
-elif [ "$distro_type" = "ubuntu" ]; then
-    mirror="http://ports.ubuntu.com/ubuntu-ports/"
-fi
+ if [ "$distro_type" = "debian" ]; then
+     mirror="http://deb.debian.org/debian/"
+ elif [ "$distro_type" = "ubuntu" ]; then
+     mirror="http://ports.ubuntu.com/ubuntu-ports/"
+ fi
 
 echo "使用镜像源: $mirror"
 
@@ -239,22 +239,6 @@ else
     exit 1
 fi
 
-# 安装设备特定服务
-echo "🔧 安装设备特定服务..."
-if [ "$distro_type" = "debian" ]; then
-    # Debian支持所有三个包
-    chroot rootdir apt install -y rmtfs protection-domain-mapper tqftpserv
-else
-    # Ubuntu只支持protection-domain-mapper
-    chroot rootdir apt install -y protection-domain-mapper
-fi
-sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
-echo "✅ 设备特定服务安装完成"
-
-# 更新initramfs
-echo "🔧 更新initramfs..."
-chroot rootdir update-initramfs -c -k all
-echo "✅ initramfs更新完成"
 
 echo "✅ 所有设备特定包安装完成"
 
@@ -275,8 +259,6 @@ echo "✅ 自动DHCP网络配置完成。"
 echo "📋 创建文件系统表..."
 echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
 PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
-
-
 
 # Clean package cache
 echo "🧹 清理软件包缓存..."
@@ -393,11 +375,6 @@ if [ "$distro_variant" = "desktop" ]; then
     
     echo "✅ 桌面环境和图形系统配置完成"
 fi
-
-# 执行内核更新脚本确保正常启动
-echo "🔧 执行内核更新脚本..."
-chroot rootdir bash -c "$(curl -fsSL https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/Update-kernel.sh)"
-echo "✅ 内核更新脚本执行完成"
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
