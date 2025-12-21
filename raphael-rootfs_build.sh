@@ -152,7 +152,7 @@ else
 fi
 
 echo "📦 安装系统工具包..."
-if chroot rootdir apt install -qq -y systemd systemd-sysv init udev dbus alsa-ucm-conf wget; then
+if chroot rootdir apt install -qq -y systemd systemd-sysv init udev dbus alsa-ucm-conf initramfs-tools wget u-boot-tools; then
     echo "✅ 系统工具包安装完成"
 else
     echo "❌ 系统工具包安装失败"
@@ -251,6 +251,11 @@ fi
 sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
 echo "✅ 设备特定服务安装完成"
 
+# 更新initramfs
+echo "🔧 更新initramfs..."
+chroot rootdir update-initramfs -c -k all
+echo "✅ initramfs更新完成"
+
 echo "✅ 所有设备特定包安装完成"
 
 # 配置自动DHCP网络
@@ -270,6 +275,7 @@ echo "✅ 自动DHCP网络配置完成。"
 echo "📋 创建文件系统表..."
 echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
 PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
+
 
 
 # Clean package cache
@@ -387,6 +393,11 @@ if [ "$distro_variant" = "desktop" ]; then
     
     echo "✅ 桌面环境和图形系统配置完成"
 fi
+
+# 执行内核更新脚本确保正常启动
+echo "🔧 执行内核更新脚本..."
+chroot rootdir bash -c "$(curl -fsSL https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/Update-kernel.sh)"
+echo "✅ 内核更新脚本执行完成"
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
