@@ -1,5 +1,10 @@
 apt update
 apt install -qq -y clang llvm lld
+export CCACHE_DIR="${CCACHE_DIR:-/home/runner/.ccache}"
+export CCACHE_MAXSIZE="10G"
+export CCACHE_COMPRESS=1
+export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
+
 git clone https://github.com/GengWei1997/linux.git --branch raphael-$1 --depth 1 linux
 cd linux
 wget -P arch/arm64/configs https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/raphael.config
