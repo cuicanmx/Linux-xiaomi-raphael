@@ -153,16 +153,16 @@ fi
 echo "📦 安装核心基础包（服务器版+网络+WiFi）..."
 base_packages=(
     # 系统核心
-    bash-completion systemd systemd-sysv init udev dbus initramfs-tools 
+    systemd udev dbus initramfs-tools 
     # 网络基础（强制DHCP+WiFi）
-    systemd-networkd systemd-resolved wpasupplicant wireless-tools iw iproute2 net-tools 
-    firmware-linux firmware-linux-free firmware-linux-nonfree 
+    systemd-networkd systemd-resolved wpasupplicant iw iproute2 
+    firmware-linux firmware-linux-nonfree 
     # SSH依赖
     openssh-server openssh-client 
     # 基础工具
     sudo vim wget curl ping iputils-ping traceroute u-boot-tools 
     # WiFi配置工具
-    network-manager nmcli wireless-regdb crda 
+    network-manager wireless-regdb crda 
     # 音频/硬件兼容
     alsa-ucm-conf alsa-utils 
 )
@@ -228,7 +228,6 @@ EOF
     
     # 启用并设置SSH开机自启
     chroot rootdir systemctl enable ssh
-    chroot rootdir systemctl enable sshd
     
     echo "✅ SSH配置完成: 监听所有IP，允许root密码登录"
     # ======================================================================
@@ -283,8 +282,6 @@ echo "🌐 配置所有网络接口强制DHCP..."
 cat > rootdir/etc/systemd/network/00-all-interfaces.network << EOF
 [Match]
 Name=*  # 匹配所有网卡（eth*, wlan*, en*, wl*, 等）
-Type=ether
-Type=wlan
 
 [Network]
 DHCP=yes  # 强制DHCPv4
@@ -296,13 +293,9 @@ MulticastDNS=yes
 UseDomains=yes
 EOF
 
-# 启用并设置systemd-networkd和resolved开机自启
-chroot rootdir systemctl enable systemd-networkd
-chroot rootdir systemctl enable systemd-resolved
+# systemd-networkd和resolved已通过软件包自动启用
 
-# 替换静态resolv.conf为resolved的符号链接（动态DNS）
-chroot rootdir rm -f /etc/resolv.conf
-chroot rootdir ln -s /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+# resolv.conf符号链接已由systemd-resolved自动创建
 
 echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
