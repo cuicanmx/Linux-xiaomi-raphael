@@ -1,5 +1,3 @@
-#!/bin/bash
-
 set -e
 
 # 设置脚本参数数量
@@ -151,14 +149,31 @@ else
     exit 1
 fi
 
-echo "📦 安装系统工具包..."
-if chroot rootdir apt install -qq -y bash-completion systemd systemd-sysv init udev dbus alsa-ucm-conf initramfs-tools wget u-boot-tools; then
-    echo "✅ 系统工具包安装完成"
+# ======================== 关键修改1：补充服务器版最小包 + WiFi组件 ========================
+echo "📦 安装核心基础包（服务器版+网络+WiFi）..."
+base_packages=(
+    # 系统核心
+    bash-completion systemd systemd-sysv init udev dbus initramfs-tools 
+    # 网络基础（强制DHCP+WiFi）
+    systemd-networkd systemd-resolved wpasupplicant wireless-tools iw iproute2 net-tools 
+    firmware-linux firmware-linux-free firmware-linux-nonfree 
+    # SSH依赖
+    openssh-server openssh-client 
+    # 基础工具
+    sudo vim wget curl ping iputils-ping traceroute u-boot-tools 
+    # WiFi配置工具
+    network-manager nmcli wireless-regdb crda 
+    # 音频/硬件兼容
+    alsa-ucm-conf alsa-utils 
+)
+
+if chroot rootdir apt install -qq -y "${base_packages[@]}"; then
+    echo "✅ 核心基础包安装完成"
 else
-    echo "❌ 系统工具包安装失败"
+    echo "❌ 核心基础包安装失败"
     exit 1
 fi
-
+# ======================================================================================
 
 # 设置root密码 (仅服务器环境)
 if [[ "$distro_variant" != *"desktop"* ]]; then
@@ -179,24 +194,44 @@ if [[ "$distro_variant" == *"desktop"* ]]; then
 else
     echo "🖥️  服务器环境检测: 开始配置SSH"
     
-    # 安装SSH服务器
-    echo "🔧 安装SSH服务器..."
-    if chroot rootdir apt install -qq -y openssh-server; then
-        echo "✅ SSH服务器安装完成"
-    else
-        echo "❌ SSH服务器安装失败"
-        exit 1
-    fi
+    # ======================== 关键修改2：优化SSH配置 ========================
+    echo "🔧 配置SSH服务..."
+    # 备份原配置
+    chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+    # 清空原有配置，写入最小化可靠配置
+    cat > rootdir/etc/ssh/sshd_config << EOF
+# 基础配置
+Port 22
+ListenAddress 0.0.0.0
+ListenAddress ::
+Protocol 2
+
+# 认证配置
+PermitRootLogin yes
+PasswordAuthentication yes
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+
+# 安全配置
+PermitEmptyPasswords no
+MaxAuthTries 6
+MaxSessions 10
+
+# 服务配置
+UsePAM yes
+Subsystem sftp /usr/lib/openssh/sftp-server
+EOF
     
-    # 配置SSH允许root登录
-    echo "🔓 配置SSH允许root登录..."
-    echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
-    echo "PasswordAuthentication yes" >> rootdir/etc/ssh/sshd_config
+    # 修复SSH目录权限
+    chroot rootdir chmod 700 /var/run/sshd
+    chroot rootdir chmod 755 /etc/ssh
     
-    # 启用SSH服务
+    # 启用并设置SSH开机自启
     chroot rootdir systemctl enable ssh
+    chroot rootdir systemctl enable sshd
     
-    echo "✅ SSH配置完成: root登录已启用"
+    echo "✅ SSH配置完成: 监听所有IP，允许root密码登录"
+    # ======================================================================
 fi
 
 echo "🔄 更新系统..."
@@ -239,21 +274,70 @@ else
     exit 1
 fi
 
-
 echo "✅ 所有设备特定包安装完成"
 
-# 配置自动DHCP网络
-echo "🌐 配置 systemd-networkd 自动DHCP..."
-cat > rootdir/etc/systemd/network/20-eth0.network << EOF
+# ======================== 关键修改3：全网卡强制DHCP配置 ========================
+echo "🌐 配置所有网络接口强制DHCP..."
+# 删除原有仅针对eth0的配置
+rm -f rootdir/etc/systemd/network/20-eth0.network
+
+# 配置1：匹配所有有线/无线接口（通配符）
+cat > rootdir/etc/systemd/network/00-all-interfaces.network << EOF
 [Match]
-Name=eth0
+Name=*  # 匹配所有网卡（eth*, wlan*, en*, wl*, 等）
+Type=ether
+Type=wlan
+
+[Network]
+DHCP=yes  # 强制DHCPv4
+DHCPv6=yes  # 可选：启用DHCPv6
+LLMNR=yes
+MulticastDNS=yes
+
+[DHCP]
+UseDomains=yes
+EOF
+
+# 配置2：确保WiFi接口也能正常获取DHCP
+cat > rootdir/etc/systemd/network/10-wifi-dhcp.network << EOF
+[Match]
+Name=wlan* wl*  # 明确匹配WiFi接口
+Type=wlan
 
 [Network]
 DHCP=yes
 EOF
-# 启用服务
+
+# 启用并设置systemd-networkd和resolved开机自启
 chroot rootdir systemctl enable systemd-networkd
-echo "✅ 自动DHCP网络配置完成。"
+chroot rootdir systemctl enable systemd-resolved
+
+# 替换静态resolv.conf为resolved的符号链接（动态DNS）
+chroot rootdir rm -f /etc/resolv.conf
+chroot rootdir ln -s /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+
+echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
+# ==============================================================================
+
+# ======================== 关键修改4：WiFi基础配置 ========================
+echo "🔧 配置WiFi基础环境..."
+# 创建WiFi配置目录
+mkdir -p rootdir/etc/wpa_supplicant
+# 生成默认wpa_supplicant配置（支持用户后续配置WiFi）
+cat > rootdir/etc/wpa_supplicant/wpa_supplicant.conf << EOF
+ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+update_config=1
+country=CN  # 中国WiFi频段
+EOF
+
+# 启用wpa_supplicant服务（适配所有WiFi接口）
+chroot rootdir systemctl enable wpa_supplicant@wlan0.service
+# 配置NetworkManager兼容（可选，方便用户手动配置WiFi）
+chroot rootdir systemctl enable NetworkManager
+
+echo "✅ WiFi基础配置完成：用户可通过wpa_cli/nmcli配置WiFi"
+# ======================================================================
+
 
 # Create fstab
 echo "📋 创建文件系统表..."
@@ -263,13 +347,16 @@ PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
 # Clean package cache
 echo "🧹 清理软件包缓存..."
 chroot rootdir apt -qq clean
+
 # Network and system configuration
-echo "🔧 配置网络和系统设置..."
-echo "nameserver 223.5.5.5" | tee rootdir/etc/resolv.conf
+echo "🔧 配置系统基础设置..."
 echo "xiaomi-raphael" | tee rootdir/etc/hostname
 echo "127.0.0.1 localhost
-127.0.1.1 xiaomi-raphael" | tee rootdir/etc/hosts
-echo "✅ 网络和主机名配置完成"
+127.0.1.1 xiaomi-raphael
+::1 localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters" | tee rootdir/etc/hosts
+echo "✅ 主机名和hosts配置完成"
 
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
@@ -314,10 +401,8 @@ if [ "$distro_variant" = "desktop" ]; then
     
     # 启用显示管理器服务
     if [ "$distro_type" = "debian" ]; then
-        # GNOME使用GDM作为显示管理器，已由task-gnome-desktop自动配置
         echo "✅ GDM显示管理器已自动配置"
     fi
-    # 安装ubuntu-desktop元包已包含所有必要的图形组件和服务配置
     
     # 创建普通用户（用于桌面登录）
     echo "👤 创建普通用户..."
@@ -328,34 +413,26 @@ if [ "$distro_variant" = "desktop" ]; then
         chroot rootdir usermod -aG sudo user
         echo "✅ 普通用户 'user' 创建完成（密码: user）"
         
-        # Debian和Ubuntu现在都使用GNOME桌面环境
         mkdir -p rootdir/home/user/.config
-        echo "✅ 用户会话配置完成（GNOME默认）"
-        # 设置用户权限
         chroot rootdir chown -R user:user /home/user/.config
     else
         echo "⚠️ 用户 'user' 已存在"
     fi
     
-    # 添加完整的图形系统状态检查
+    # 图形系统状态检查
     echo "🔍 图形系统状态检查..."
-    
-    # 检查关键图形服务状态 - 两个发行版现在都使用GDM
     echo "📋 图形服务状态检查:"
-    # 检查GDM/GDM3服务状态
     if chroot rootdir systemctl is-enabled gdm.service || chroot rootdir systemctl is-enabled gdm3.service; then
         echo "   ✅ GDM服务已启用"
     else
         echo "   ❌ GDM服务未启用"
     fi
-    # 检查DBus服务状态
     if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
         echo "   ✅ DBus服务已启用"
     else
         echo "   ❌ DBus服务未启用"
     fi
     
-    # 检查GNOME会话配置
     echo "📋 GNOME会话配置检查:"
     if chroot rootdir dpkg -l | grep -q gnome-session; then
         echo "   ✅ GNOME会话管理器已安装"
@@ -363,7 +440,6 @@ if [ "$distro_variant" = "desktop" ]; then
         echo "   ❌ GNOME会话管理器未安装"
     fi
     
-    # 检查默认启动目标
     echo "📋 系统启动目标检查:"
     current_target=$(chroot rootdir systemctl get-default)
     echo "   当前默认启动目标: $current_target"
@@ -378,28 +454,25 @@ fi
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
-# 先卸载rootdir内部的虚拟文件系统
 umount -t sysfs -f rootdir/sys 2>/dev/null || echo "⚠️  sysfs未挂载或卸载失败"
 umount -t proc -f rootdir/proc 2>/dev/null || echo "⚠️  proc未挂载或卸载失败"
 umount -t devpts -f rootdir/dev/pts 2>/dev/null || echo "⚠️  devpts未挂载或卸载失败"
 umount -l rootdir/dev 2>/dev/null || echo "⚠️  /dev未挂载或卸载失败"
 
-# 然后卸载rootdir本身（rootfs.img挂载点）
 echo "🔓 卸载rootfs.img..."
 umount -f rootdir 2>/dev/null || echo "⚠️  rootfs.img未挂载或卸载失败"
 
-# 最后清理目录
 echo "🧹 清理rootdir目录..."
 rm -rf rootdir
 echo "✅ 虚拟文件系统卸载和目录清理完成"
 
-# 临时目录已经在卸载步骤中清理完成
-echo "✅ 所有临时目录清理完成"
 echo "🔧 调整文件系统UUID..."
 tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img
 echo "✅ 文件系统UUID调整完成"
+
 echo "检查目录下文件..."
 ls 
+
 # Create 7z archive
 echo "🗜️ 创建压缩包..."
 output_file="raphael-${distro_type}-${distro_variant}-kernel-$2.7z"
