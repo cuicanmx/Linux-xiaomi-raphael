@@ -25,9 +25,9 @@ jobs:
         id: cache-ccache
         with:
           path: /home/runner/.ccache
-          # 修复1: 使用固定的key结构，移除脚本哈希（脚本可能频繁变化）
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
-          # 修复2: 简化restore-keys，确保能找到历史缓存
+          # 优化: 使用更稳定的缓存键，包含内核版本和分支名
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}
+          # 优化: 更智能的缓存恢复策略，优先匹配同内核版本和分支
           restore-keys: |
             ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-
             ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
@@ -48,9 +48,12 @@ jobs:
           sudo chown -R runner:runner /home/runner/.ccache
           sudo chmod -R 777 /home/runner/.ccache
           
-          # 配置ccache
+          # 优化ccache配置
           ccache --set-config=max_size=10G
           ccache --set-config=cache_dir=/home/runner/.ccache
+          ccache --set-config=compress=1
+          ccache --set-config=sloppiness=file_macro,locale,time_macros
+          ccache --set-config=compression_level=6
           
           echo "📊 缓存恢复状态: ${{ steps.cache-ccache.outputs.cache-hit }}"
           ccache --show-stats
@@ -91,7 +94,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: /home/runner/.ccache
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}
 
       - name: "📦 收集编译产物"
         id: collect_artifacts
