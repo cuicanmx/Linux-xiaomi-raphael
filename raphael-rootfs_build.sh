@@ -301,8 +301,7 @@ echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动�
 # Create fstab
 echo "📋 创建文件系统表..."
 echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
-PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
-
+PARTLABEL=cache /boot vfat umask=0077,nofail 0 1" | tee rootdir/etc/fstab
 # Clean package cache
 echo "🧹 清理软件包缓存..."
 chroot rootdir apt -qq clean
