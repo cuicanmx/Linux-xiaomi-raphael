@@ -199,9 +199,6 @@ jobs:
         # 创建发布目录
         RELEASE_DIR="./release-assets"
         mkdir -p "$RELEASE_DIR"
-        
-
-        
         # 查找并移动所有.7z和.img文件 - 递归查找所有子目录并正确分组条件
         find ./artifacts -type f -depth \( -name "*.7z" -o -name "*.img" \) -exec mv {} "$RELEASE_DIR/" \;
         
@@ -258,22 +255,32 @@ jobs:
         tag_name: ${{ steps.generate_tag.outputs.release_tag }}
         name: "Ubuntu/Debian for Raphael - ${{ steps.generate_tag.outputs.release_tag }}"
         body: |
-          # 🐧 Ubuntu/Debian 镜像集合
+          # 🐧 Ubuntu/Debian 镜像
           
           ## 📋 构建信息
           - **内核版本**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
           - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-          - **包含变体**: Debian Server/Desktop, Ubuntu Server/Desktop
+          - **包含变体**: ${{ github.event.inputs.test_mode == 'true' && 'Debian Server (测试模式)' || 'Debian Server/Desktop, Ubuntu Server/Desktop' }}
+          - **构建时间**: ${{ github.event.created_at }}
+          - **总大小**: ${{ steps.prepare_release.outputs.total_size_mb }} MB
+          
+          ${{ github.event.inputs.test_mode == 'true' && '> ⚠️ 测试模式：仅构建了Debian Server变体' || '' }}
           
           ## ⚠️ 重要提示
           ### 默认凭据
           - **用户名**: `root`
           - **密码**: `1234` (首次登录后请立即修改！)
+          - **普通用户**: `user`
+          - **用户密码**: `user`
           
           ### 安全建议
           1. 首次登录后立即修改默认密码
+          2. 禁用root远程登录（可选）
+          3. 配置防火墙规则
 
+          ## 📦 镜像文件
           ${{ steps.prepare_release.outputs.filelist_text }}
+
         draft: false
         prerelease: false
         files: |

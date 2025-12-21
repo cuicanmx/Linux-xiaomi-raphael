@@ -14,7 +14,7 @@
 - ✅ **一键部署**: 简单的刷机流程
 
 ## 🚀 快速开始
-详见 [Wiki](https://github.com/your-username/ubuntu-xiaomi-raphael-uboot/wiki/)
+- 详见 [Wiki](https://github.com/your-username/ubuntu-xiaomi-raphael-uboot/wiki/)
 
 ## 🔧 系统配置
 
