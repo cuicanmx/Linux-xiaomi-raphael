@@ -190,29 +190,8 @@ else
     # 备份原配置
     chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
     # 清空原有配置，写入最小化可靠配置
-    cat > rootdir/etc/ssh/sshd_config << EOF
-# 基础配置
-Port 22
-ListenAddress 0.0.0.0
-ListenAddress ::
-Protocol 2
-
-# 认证配置
-PermitRootLogin yes
-PasswordAuthentication yes
-ChallengeResponseAuthentication no
-PubkeyAuthentication yes
-
-# 安全配置
-PermitEmptyPasswords no
-MaxAuthTries 6
-MaxSessions 10
-
-# 服务配置
-UsePAM yes
-Subsystem sftp /usr/lib/openssh/sftp-server
-EOF
-    
+    # 允许root登录ssh
+    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
     # 修复SSH目录权限
     chroot rootdir chmod 700 /var/run/sshd
     chroot rootdir chmod 755 /etc/ssh
