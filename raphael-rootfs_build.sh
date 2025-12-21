@@ -157,13 +157,13 @@ fi
 echo "📦 安装核心基础包"
 base_packages=(
     # 系统核心
-    systemd udev dbus initramfs-tools bash-completion
+    systemd udev dbus bash-completion
     # 网络基础（强制DHCP+WiFi）
     systemd-resolved wpasupplicant iw iproute2 sudo
     # SSH依赖
     openssh-server openssh-client 
     # 基础工具
-    sudo vim wget curl iputils-ping traceroute u-boot-tools 
+    sudo vim wget curl iputils-ping traceroute
     # WiFi配置工具
     network-manager wireless-regdb 
     # 音频/硬件兼容
