@@ -47,7 +47,8 @@
 3. **发布管理**: 构建完成后自动创建 Release
 
 ## ⚙️ 技术细节
-
+### 关闭屏幕
+echo 1 | sudo tee /sys/class/graphics/fb0/blank
 ### 内核版本
 - **当前版本**: 6.18.2
 - **源码仓库**: [GengWei1997/linux](https://github.com/GengWei1997/linux)
