@@ -257,7 +257,8 @@ echo "✅ 所有设备特定包安装完成"
 
 # ======================== 关键修改3：全网卡强制DHCP配置 ========================
 echo "🌐 配置所有网络接口强制DHCP..."
-cat > rootfs/etc/systemd/network/10-autodhcp.network << EOF
+mkdir -p rootdir/etc/systemd/network/
+cat > rootdir/etc/systemd/network/10-autodhcp.network << EOF
 [Match]
 # 匹配所有可能的网卡命名模式
 Name=eth* en* wl* wlp* wlan* eno* ens* enp* enx* enP*
@@ -274,11 +275,11 @@ UseDNS=true
 UseHostname=false
 EOF
 # 4. 禁用传统的network.service（如果存在）
-chroot rootfs systemctl disable networking.service 2>/dev/null || true
+chroot rootdir systemctl disable networking.service 2>/dev/null || true
 
 # 5. 启用systemd-networkd
-chroot rootfs systemctl enable systemd-networkd
-chroot rootfs systemctl enable systemd-resolved
+chroot rootdir systemctl enable systemd-networkd
+chroot rootdir systemctl enable systemd-resolved
 
 echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
