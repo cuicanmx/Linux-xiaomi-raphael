@@ -237,14 +237,6 @@ EOF
     # ======================================================================
 fi
 
-# 可选：更新系统（耗时较长，默认跳过）
-# echo "🔄 更新系统..."
-# if chroot rootdir apt -qq upgrade -y; then
-#     echo "✅ 系统更新完成"
-# else
-#     echo "⚠️  系统更新部分失败，继续构建"
-# fi
-
 # Install device-specific packages
 echo "📱 安装设备特定包..."
 echo "📦 复制内核包到 chroot 环境..."
@@ -351,10 +343,6 @@ if chroot rootdir apt install -qq -y ubuntu-desktop; then
     echo "✅ GDM初始配置完成"
 else
     echo "❌ Ubuntu桌面环境安装失败"
-    echo "💡 可能的解决方法:"
-    echo "   1. 检查网络连接"
-    echo "   2. 更换镜像源"
-    echo "   3. 增加apt安装的超时时间"
     exit 1
 fi
     fi
