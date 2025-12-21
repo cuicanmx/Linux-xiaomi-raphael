@@ -1,7 +1,7 @@
 set -e
 
 # 配置变量
-IMAGE_SIZE="3G"
+IMAGE_SIZE="6G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 
 # 设置脚本参数数量
@@ -161,7 +161,7 @@ base_packages=(
     # SSH依赖
     openssh-server openssh-client 
     # 基础工具
-    sudo vim wget curl iputils-ping traceroute
+    sudo vim wget curl iputils-ping
     # WiFi配置工具
     network-manager wireless-regdb 
     # 音频/硬件兼容
@@ -180,7 +180,7 @@ fi
 # 使用passwd命令修改root密码为1234
 echo "设置Root密码..."
 # 在chroot环境中使用passwd命令，通过管道自动输入密码
-chroot rootdir bash -c "echo '1234' | passwd --stdin root"
+chroot rootdir bash -c "echo '1234' | passwd root"
 if [ $? -eq 0 ]; then
     echo "✅ Root密码设置完成: root/1234"
 else
