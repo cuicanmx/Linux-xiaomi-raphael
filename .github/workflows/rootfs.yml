@@ -156,6 +156,7 @@ jobs:
         name: ${{ matrix.distro }}-${{ steps.kernel_version.outputs.kernel_version }}
         path: |
           ${{ matrix.distro }}-kernel-*.7z
+          ${{ startsWith(matrix.distro, 'debian-server') && 'xiaomi-k20pro-boot.img' || '' }}
         retention-days: 14
         if-no-files-found: error
         compression-level: 0  # 文件已压缩，跳过二次压缩
@@ -285,6 +286,7 @@ jobs:
         prerelease: false
         files: |
           release-assets/*.7z
+          release-assets/xiaomi-k20pro-boot.img
         generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

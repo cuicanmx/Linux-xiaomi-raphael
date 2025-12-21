@@ -1,9 +1,17 @@
 apt update
 apt install -qq -y clang llvm lld
+# 设置ccache环境变量
 export CCACHE_DIR="${CCACHE_DIR:-/home/runner/.ccache}"
 export CCACHE_MAXSIZE="10G"
 export CCACHE_COMPRESS=1
 export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
+
+# 确保ccache目录存在
+mkdir -p "$CCACHE_DIR"
+
+# 显示ccache状态
+echo "ccache状态检查:"
+ccache --show-stats 2>/dev/null || echo "ccache未安装"
 
 git clone https://github.com/GengWei1997/linux.git --branch raphael-$1 --depth 1 linux
 cd linux
@@ -25,3 +33,4 @@ rm -rf linux
 dpkg-deb --build --root-owner-group linux-xiaomi-raphael
 dpkg-deb --build --root-owner-group firmware-xiaomi-raphael
 dpkg-deb --build --root-owner-group alsa-xiaomi-raphael
+ccache --show-stats

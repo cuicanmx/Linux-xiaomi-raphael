@@ -294,7 +294,20 @@ chroot rootdir systemctl enable systemd-resolved
 echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
 chroot rootdir update-initramfs -c -k all
+# Generated boot - 仅在构建debian-server时执行
+if [ "$distro_type" = "debian" ] && [ "$distro_variant" = "server" ]; then
+    mkdir -p boot_tmp
+    wget https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
+    mount -o loop xiaomi-k20pro-boot.img boot_tmp
 
+    cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/
+    cp rootdir/boot/config-* boot_tmp/
+    cp rootdir/boot/initrd.img-* boot_tmp/initramfs
+    cp rootdir/boot/vmlinuz-* boot_tmp/linux.efi
+
+    umount boot_tmp
+    rm -d boot_tmp
+fi
 # Create fstab
 echo "📋 创建文件系统表..."
 echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
