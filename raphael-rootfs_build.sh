@@ -154,19 +154,18 @@ else
 fi
 
 # ======================== 关键修改1：补充服务器版最小包 + WiFi组件 ========================
-echo "📦 安装核心基础包（服务器版+网络+WiFi）..."
+echo "📦 安装核心基础包"
 base_packages=(
     # 系统核心
-    systemd udev dbus initramfs-tools 
+    systemd udev dbus initramfs-tools bash-completion
     # 网络基础（强制DHCP+WiFi）
-    systemd-networkd systemd-resolved wpasupplicant iw iproute2 
-    firmware-linux firmware-linux-nonfree 
+    systemd-resolved wpasupplicant iw iproute2 sudo
     # SSH依赖
     openssh-server openssh-client 
     # 基础工具
-    sudo vim wget curl ping iputils-ping traceroute u-boot-tools 
+    sudo vim wget curl iputils-ping traceroute u-boot-tools 
     # WiFi配置工具
-    network-manager wireless-regdb crda 
+    network-manager wireless-regdb 
     # 音频/硬件兼容
     alsa-ucm-conf alsa-utils 
 )
