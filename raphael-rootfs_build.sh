@@ -2,8 +2,6 @@ set -e
 
 # 配置变量
 IMAGE_SIZE="6G"
-ROOT_PASSWORD="123456"
-USER_PASSWORD="user"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 
 # 设置脚本参数数量
@@ -127,7 +125,7 @@ echo "🔗 使用镜像源: $mirror"
 echo "🔗 使用镜像源: $mirror"
 
 echo "执行命令: sudo debootstrap --arch=arm64 $distro_version rootdir $mirror"
-if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
+if sudo debootstrap --arch=arm64 -–variant "$distro_version" rootdir "$mirror"; then
     echo "✅ 系统引导完成"
 else
     echo "❌ debootstrap 失败"
@@ -179,18 +177,7 @@ else
 fi
 # ======================================================================================
 
-# 设置root密码 (仅服务器环境)
-if [[ "$distro_variant" != *"desktop"* ]]; then
-    echo "🔑 设置root密码..."
-    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd
-    echo "✅ root密码设置完成 (密码: $ROOT_PASSWORD)"
 
-    # 添加重要安全提示
-    echo "⚠️  ⚠️  ⚠️  重要安全提示 ⚠️  ⚠️  ⚠️"
-    echo "root密码: 123456"
-    echo "首次登录后请立即修改密码！"
-    echo "⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️  ⚠️"
-fi
 
 # 配置SSH (仅服务器环境)
 if [[ "$distro_variant" == *"desktop"* ]]; then
@@ -363,20 +350,6 @@ fi
         echo "✅ GDM显示管理器已自动配置"
     fi
     
-    # 创建普通用户（用于桌面登录）
-    echo "👤 创建普通用户..."
-    if ! chroot rootdir id -u user >/dev/null 2>&1; then
-        chroot rootdir useradd -m -s /bin/bash user
-        echo "user:$USER_PASSWORD" | chroot rootdir chpasswd
-        # 为用户添加sudo权限
-        chroot rootdir usermod -aG sudo user
-        echo "✅ 普通用户 'user' 创建完成（密码: $USER_PASSWORD）"
-        
-        mkdir -p rootdir/home/user/.config
-        chroot rootdir chown -R user:user /home/user/.config
-    else
-        echo "⚠️ 用户 'user' 已存在"
-    fi
     
     # 图形系统状态检查
     echo "🔍 图形系统状态检查..."
