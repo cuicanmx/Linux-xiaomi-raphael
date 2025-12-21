@@ -206,8 +206,10 @@ else
     # 备份原配置
     chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
     # 清空原有配置，写入最小化可靠配置
-    # 允许root登录ssh
-    echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+    # 配置SSH权限
+    echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
+    echo "PubkeyAuthentication no" >> rootdir/etc/ssh/sshd_config
+    echo "PasswordAuthentication yes" >> rootdir/etc/ssh/sshd_config
     # 修复SSH目录权限
     chroot rootdir chmod 700 /var/run/sshd
     chroot rootdir chmod 755 /etc/ssh
