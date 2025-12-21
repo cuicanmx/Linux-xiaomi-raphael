@@ -208,12 +208,8 @@ else
     # 清空原有配置，写入最小化可靠配置
     # 配置SSH权限
     echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
-    echo "PubkeyAuthentication no" >> rootdir/etc/ssh/sshd_config
+    echo "PubkeyAuthentication yes" >> rootdir/etc/ssh/sshd_config
     echo "PasswordAuthentication yes" >> rootdir/etc/ssh/sshd_config
-    # 修复SSH目录权限
-    chroot rootdir chmod 700 /var/run/sshd
-    chroot rootdir chmod 755 /etc/ssh
-    
     # 启用并设置SSH开机自启
     chroot rootdir systemctl enable ssh
     
