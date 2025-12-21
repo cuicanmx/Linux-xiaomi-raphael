@@ -393,9 +393,6 @@ if [ "$distro_variant" = "desktop" ]; then
     
     echo "✅ 桌面环境和图形系统配置完成"
 fi
-# 清理安装的deb包
-echo "🧹 清理安装的deb包..."
-chroot rootdir rm -rf *.deb
 
 # 执行内核更新脚本确保正常启动
 echo "🔧 执行内核更新脚本..."
