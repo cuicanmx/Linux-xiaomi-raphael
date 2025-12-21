@@ -1,5 +1,11 @@
 set -e
 
+# 配置变量
+IMAGE_SIZE="6G"
+ROOT_PASSWORD="123456"
+USER_PASSWORD="user"
+FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
+
 # 设置脚本参数数量
 SCRIPT_ARG_COUNT=$#
 
@@ -50,30 +56,16 @@ echo "检查内核包文件..."
 found_packages=0
 missing_packages=""
 
-# 检查每个包文件（使用不带版本号的文件名）
-if ls linux-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    echo "找到: linux-xiaomi-raphael*.deb"
-    found_packages=$((found_packages + 1))
-else
-    missing_packages="linux-xiaomi-raphael*.deb $missing_packages"
-    echo "未找到: linux-xiaomi-raphael*.deb"
-fi
-
-if ls firmware-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    echo "找到: firmware-xiaomi-raphael*.deb"
-    found_packages=$((found_packages + 1))
-else
-    missing_packages="firmware-xiaomi-raphael*.deb $missing_packages"
-    echo "未找到: firmware-xiaomi-raphael*.deb"
-fi
-
-if ls alsa-xiaomi-raphael*.deb 1> /dev/null 2>&1; then
-    echo "找到: alsa-xiaomi-raphael*.deb"
-    found_packages=$((found_packages + 1))
-else
-    missing_packages="alsa-xiaomi-raphael*.deb $missing_packages"
-    echo "未找到: alsa-xiaomi-raphael*.deb"
-fi
+# 检查每个包文件（使用通配符匹配）
+for pkg in linux-xiaomi-raphael firmware-xiaomi-raphael alsa-xiaomi-raphael; do
+    if ls ${pkg}*.deb 1> /dev/null 2>&1; then
+        echo "找到: ${pkg}*.deb"
+        found_packages=$((found_packages + 1))
+    else
+        missing_packages="${pkg}*.deb $missing_packages"
+        echo "未找到: ${pkg}*.deb"
+    fi
+done
 
 if [ $found_packages -lt 3 ]; then
     echo "错误: 缺少必需的内核包: $missing_packages"
@@ -88,11 +80,15 @@ echo "所有必需的内核包已就绪 ($found_packages/3)"
 # 清理旧的rootfs和镜像文件
 echo "清理旧的rootfs和镜像文件..."
 if [ -d "rootdir" ]; then
-    umount rootdir/sys 2>/dev/null || true
-    umount rootdir/proc 2>/dev/null || true
-    umount rootdir/dev/pts 2>/dev/null || true
-    umount rootdir/dev 2>/dev/null || true
-    umount rootdir 2>/dev/null || true
+    # 尝试优雅卸载
+    for mountpoint in sys proc dev/pts dev; do
+        if mountpoint -q "rootdir/$mountpoint"; then
+            umount "rootdir/$mountpoint" || echo "警告: 无法卸载 rootdir/$mountpoint"
+        fi
+    done
+    if mountpoint -q "rootdir"; then
+        umount "rootdir" || echo "警告: 无法卸载 rootdir"
+    fi
     rm -rf rootdir
     echo "旧目录已清理"
 fi
@@ -104,7 +100,7 @@ fi
 
 # Create and mount image file
 echo "📁 创建IMG镜像文件..."
-truncate -s 6G rootfs.img
+truncate -s $IMAGE_SIZE rootfs.img
 mkfs.ext4 rootfs.img
 mkdir -p rootdir
 mount -o loop rootfs.img rootdir
@@ -178,8 +174,8 @@ fi
 # 设置root密码 (仅服务器环境)
 if [[ "$distro_variant" != *"desktop"* ]]; then
     echo "🔑 设置root密码..."
-    echo "root:123456" | chroot rootdir chpasswd
-    echo "✅ root密码设置完成 (密码: 123456)"
+    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd
+    echo "✅ root密码设置完成 (密码: $ROOT_PASSWORD)"
 
     # 添加重要安全提示
     echo "⚠️  ⚠️  ⚠️  重要安全提示 ⚠️  ⚠️  ⚠️"
@@ -233,12 +229,13 @@ EOF
     # ======================================================================
 fi
 
-echo "🔄 更新系统..."
-if chroot rootdir apt -qq upgrade -y; then
-    echo "✅ 系统更新完成"
-else
-    echo "⚠️  系统更新部分失败，继续构建"
-fi
+# 可选：更新系统（耗时较长，默认跳过）
+# echo "🔄 更新系统..."
+# if chroot rootdir apt -qq upgrade -y; then
+#     echo "✅ 系统更新完成"
+# else
+#     echo "⚠️  系统更新部分失败，继续构建"
+# fi
 
 # Install device-specific packages
 echo "📱 安装设备特定包..."
@@ -322,7 +319,7 @@ echo "✅ 主机名和hosts配置完成"
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
     echo "🖥️ 安装桌面环境..."
-    chroot rootdir apt -qq update
+    # 已在之前执行过apt update，无需重复执行
     
     if [ "$distro_type" = "debian" ]; then
         echo "🎨 安装GNOME桌面环境..."
@@ -369,10 +366,10 @@ if [ "$distro_variant" = "desktop" ]; then
     echo "👤 创建普通用户..."
     if ! chroot rootdir id -u user >/dev/null 2>&1; then
         chroot rootdir useradd -m -s /bin/bash user
-        echo "user:user" | chroot rootdir chpasswd
+        echo "user:$USER_PASSWORD" | chroot rootdir chpasswd
         # 为用户添加sudo权限
         chroot rootdir usermod -aG sudo user
-        echo "✅ 普通用户 'user' 创建完成（密码: user）"
+        echo "✅ 普通用户 'user' 创建完成（密码: $USER_PASSWORD）"
         
         mkdir -p rootdir/home/user/.config
         chroot rootdir chown -R user:user /home/user/.config
@@ -415,20 +412,24 @@ fi
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
-umount -t sysfs -f rootdir/sys 2>/dev/null || echo "⚠️  sysfs未挂载或卸载失败"
-umount -t proc -f rootdir/proc 2>/dev/null || echo "⚠️  proc未挂载或卸载失败"
-umount -t devpts -f rootdir/dev/pts 2>/dev/null || echo "⚠️  devpts未挂载或卸载失败"
-umount -l rootdir/dev 2>/dev/null || echo "⚠️  /dev未挂载或卸载失败"
+# 优雅卸载，避免强制卸载
+for mountpoint in sys proc dev/pts dev; do
+    if mountpoint -q "rootdir/$mountpoint"; then
+        umount "rootdir/$mountpoint" || echo "⚠️  无法卸载 rootdir/$mountpoint"
+    fi
+done
 
 echo "🔓 卸载rootfs.img..."
-umount -f rootdir 2>/dev/null || echo "⚠️  rootfs.img未挂载或卸载失败"
+if mountpoint -q "rootdir"; then
+    umount "rootdir" || echo "⚠️  无法卸载 rootdir"
+fi
 
 echo "🧹 清理rootdir目录..."
 rm -rf rootdir
 echo "✅ 虚拟文件系统卸载和目录清理完成"
 
 echo "🔧 调整文件系统UUID..."
-tune2fs -U ee8d3593-59b1-480e-a3b6-4fefb17ee7d8 rootfs.img
+tune2fs -U $FILESYSTEM_UUID rootfs.img
 echo "✅ 文件系统UUID调整完成"
 
 echo "检查目录下文件..."
