@@ -109,6 +109,7 @@ echo "✅ 6GB镜像文件创建并挂载完成"
 # Bootstrap the rootfs
 echo "🌱 开始引导系统 (debootstrap)..."
 echo "📥 下载: $distro_type $distro_version"
+echo "🔗 使用镜像源: $mirror"
 
 # Set mirror based on distribution type
  if [ "$distro_type" = "debian" ]; then
@@ -119,6 +120,7 @@ echo "📥 下载: $distro_type $distro_version"
 
 echo "🔗 使用镜像源: $mirror"
 
+echo "执行命令: sudo debootstrap --arch=arm64 $distro_version rootdir $mirror"
 if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
     echo "✅ 系统引导完成"
 else
@@ -163,6 +165,7 @@ base_packages=(
     alsa-ucm-conf alsa-utils 
 )
 
+echo "执行命令: chroot rootdir apt install -qq -y ${base_packages[*]}"
 if chroot rootdir apt install -qq -y "${base_packages[@]}"; then
     echo "✅ 核心基础包安装完成"
 else
@@ -239,6 +242,7 @@ fi
 
 # Install device-specific packages
 echo "📱 安装设备特定包..."
+echo "📦 复制内核包到 chroot 环境..."
 
 # Copy kernel packages to chroot environment
 echo "📦 复制内核包到 chroot 环境..."
@@ -334,15 +338,20 @@ if [ "$distro_variant" = "desktop" ]; then
         fi
     elif [ "$distro_type" = "ubuntu" ]; then
         echo "🎨 安装Ubuntu桌面环境..."
-        if chroot rootdir apt install -qq -y ubuntu-desktop; then
-            echo "✅ Ubuntu桌面环境安装完成"
-            mkdir -p rootdir/var/lib/gdm
-            touch rootdir/var/lib/gdm/run-initial-setup
-            echo "✅ GDM初始配置完成"
-        else
-            echo "❌ Ubuntu桌面环境安装失败"
-            exit 1
-        fi
+        echo "执行命令: chroot rootdir apt install -qq -y ubuntu-desktop"
+if chroot rootdir apt install -qq -y ubuntu-desktop; then
+    echo "✅ Ubuntu桌面环境安装完成"
+    mkdir -p rootdir/var/lib/gdm
+    touch rootdir/var/lib/gdm/run-initial-setup
+    echo "✅ GDM初始配置完成"
+else
+    echo "❌ Ubuntu桌面环境安装失败"
+    echo "💡 可能的解决方法:"
+    echo "   1. 检查网络连接"
+    echo "   2. 更换镜像源"
+    echo "   3. 增加apt安装的超时时间"
+    exit 1
+fi
     fi
     
     # 配置系统默认启动图形界面
@@ -437,7 +446,8 @@ ls
 
 # Create 7z archive
 echo "🗜️ 创建压缩包..."
-output_file="raphael-${distro_type}-${distro_variant}-kernel-$2.7z"
+output_file="raphael-${1}-kernel-$2.7z"
+echo "输出文件: $output_file"
 if 7z a "${output_file}" rootfs.img; then
     echo "✅ 压缩包创建成功: ${output_file}"
     echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
