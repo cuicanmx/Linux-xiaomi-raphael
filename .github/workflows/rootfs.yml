@@ -125,8 +125,8 @@ jobs:
         chmod +x raphael-rootfs_build.sh
         
         # 执行构建脚本
-        echo "执行构建命令: sudo ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
-        sudo ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
+          echo "执行构建命令: sudo bash ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
+          sudo bash ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
         # 检查构建结果 - 查找动态生成的压缩包
         OUTPUT_FILE="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"

@@ -25,7 +25,7 @@ fi
 
 # 确保使用bash运行脚本
 if [ -z "$BASH_VERSION" ]; then
-    echo "错误: 请使用bash运行此脚本"
+    echo "❌ 错误: 请使用bash运行此脚本"
     exit 1
 fi
 
