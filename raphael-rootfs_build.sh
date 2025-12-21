@@ -179,13 +179,25 @@ fi
 
 # 使用passwd命令修改root密码为1234
 echo "设置Root密码..."
-# 在chroot环境中使用passwd命令，通过管道自动输入密码
-chroot rootdir bash -c "echo '1234' | passwd root"
-if [ $? -eq 0 ]; then
-    echo "✅ Root密码设置完成: root/1234"
+# Debian构建使用--stdin参数，Ubuntu构建不使用
+if [ "$distro_type" = "debian" ]; then
+    # 在chroot环境中使用passwd命令，通过管道自动输入密码
+    chroot rootdir bash -c "echo '1234' | passwd --stdin root"
+    if [ $? -eq 0 ]; then
+        echo "✅ Root密码设置完成: root/1234"
+    else
+        # 如果--stdin参数不可用，尝试另一种方法
+        echo "⚠️  passwd --stdin不可用，尝试替代方法..."
+        chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
+        if [ $? -eq 0 ]; then
+            echo "✅ Root密码设置完成: root/1234"
+        else
+            echo "❌ Root密码设置失败"
+            exit 1
+        fi
+    fi
 else
-    # 如果--stdin参数不可用，尝试另一种方法
-    echo "⚠️  passwd --stdin不可用，尝试替代方法..."
+    # Ubuntu构建不使用--stdin参数
     chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
     if [ $? -eq 0 ]; then
         echo "✅ Root密码设置完成: root/1234"
