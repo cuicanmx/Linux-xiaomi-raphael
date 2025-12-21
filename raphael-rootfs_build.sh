@@ -157,7 +157,7 @@ base_packages=(
     # 系统核心
     systemd udev dbus bash-completion net-tools
     # 网络基础（强制DHCP+WiFi）
-    systemd-resolved wpasupplicant iw iproute2 sudo
+    systemd-resolved wpasupplicant iw iproute2 sudo dhcpcd5
     # SSH依赖
     openssh-server openssh-client 
     # 基础工具
@@ -257,26 +257,26 @@ echo "✅ 所有设备特定包安装完成"
 
 # ======================== 关键修改3：全网卡强制DHCP配置 ========================
 echo "🌐 配置所有网络接口强制DHCP..."
-
-# 配置1：匹配所有有线/无线接口（通配符）
-cat > rootdir/etc/systemd/network/00-all-interfaces.network << EOF
-[Match]
-Name=*  # 匹配所有网卡（eth*, wlan*, en*, wl*, 等）
-
-[Network]
-DHCP=yes  # 强制DHCPv4
-DHCPv6=yes  # 可选：启用DHCPv6
-LLMNR=yes
-MulticastDNS=yes
-
-[DHCP]
-UseDomains=yes
+# 配置dhcpcd自动为所有接口获取IP
+cat > rootfs/etc/dhcpcd.conf << 'EOF'
+# 允许所有接口
+allowinterfaces *
+# 快速超时
+timeout 30
+# 不发送主机名
+nohostname
+# 不发送客户端ID
+clientid
+# 持久化租约
+persistent
+# 后台运行
+background
+# 使用arping检测IP冲突
+arping
 EOF
 
-# systemd-networkd和resolved已通过软件包自动启用
-
-# resolv.conf符号链接已由systemd-resolved自动创建
-
+# 启用dhcpcd服务
+chroot rootfs systemctl enable dhcpcd
 echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
 
