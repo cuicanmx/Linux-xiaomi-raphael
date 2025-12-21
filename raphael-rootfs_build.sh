@@ -1,7 +1,7 @@
 set -e
 
 # 配置变量
-IMAGE_SIZE="6G"
+IMAGE_SIZE="3G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 
 # 设置脚本参数数量
@@ -155,7 +155,7 @@ fi
 echo "📦 安装核心基础包"
 base_packages=(
     # 系统核心
-    systemd udev dbus bash-completion
+    systemd udev dbus bash-completion systemd-networkd
     # 网络基础（强制DHCP+WiFi）
     systemd-resolved wpasupplicant iw iproute2 sudo
     # SSH依赖
@@ -177,7 +177,8 @@ else
 fi
 # ======================================================================================
 
-
+# 修改root密码为1234
+sed -i '/^root:/c\root:$6$abcdefgh$Vy7OQJgM8qCJTjU0q3oKmYvjFeZZzj88Vl0cKzRh/XuJb3RANR7G4q.9QYhQlJGySqGQ7Hkq8mXeHd8Nq3qN7.:20443:0:99999:7:::' /etc/shadow
 
 # 配置SSH (仅服务器环境)
 if [[ "$distro_variant" == *"desktop"* ]]; then
