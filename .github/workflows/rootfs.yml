@@ -34,10 +34,10 @@ jobs:
       # 定义要构建的所有发行版变体
       matrix:
         distro: ${{ 
-          github.event.inputs.test_mode == 'true' 
-          && fromJSON('["debian-server"]') 
-          || fromJSON('["debian-server", "debian-desktop", "ubuntu-server", "ubuntu-desktop"]')
-        }}
+            github.event.inputs.test_mode == 'true' 
+            && fromJSON('["debian-server"]') 
+            || fromJSON('["debian-server", "debian-desktop", "ubuntu-server", "ubuntu-desktop"]')
+            }}
       # 防止一个变体构建失败导致整个任务失败
       fail-fast: false
 
