@@ -278,8 +278,6 @@ echo "✅ 所有设备特定包安装完成"
 
 # ======================== 关键修改3：全网卡强制DHCP配置 ========================
 echo "🌐 配置所有网络接口强制DHCP..."
-# 删除原有仅针对eth0的配置
-rm -f rootdir/etc/systemd/network/20-eth0.network
 
 # 配置1：匹配所有有线/无线接口（通配符）
 cat > rootdir/etc/systemd/network/00-all-interfaces.network << EOF
@@ -298,16 +296,6 @@ MulticastDNS=yes
 UseDomains=yes
 EOF
 
-# 配置2：确保WiFi接口也能正常获取DHCP
-cat > rootdir/etc/systemd/network/10-wifi-dhcp.network << EOF
-[Match]
-Name=wlan* wl*  # 明确匹配WiFi接口
-Type=wlan
-
-[Network]
-DHCP=yes
-EOF
-
 # 启用并设置systemd-networkd和resolved开机自启
 chroot rootdir systemctl enable systemd-networkd
 chroot rootdir systemctl enable systemd-resolved
@@ -318,26 +306,6 @@ chroot rootdir ln -s /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
 
 echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
-
-# ======================== 关键修改4：WiFi基础配置 ========================
-echo "🔧 配置WiFi基础环境..."
-# 创建WiFi配置目录
-mkdir -p rootdir/etc/wpa_supplicant
-# 生成默认wpa_supplicant配置（支持用户后续配置WiFi）
-cat > rootdir/etc/wpa_supplicant/wpa_supplicant.conf << EOF
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-update_config=1
-country=CN  # 中国WiFi频段
-EOF
-
-# 启用wpa_supplicant服务（适配所有WiFi接口）
-chroot rootdir systemctl enable wpa_supplicant@wlan0.service
-# 配置NetworkManager兼容（可选，方便用户手动配置WiFi）
-chroot rootdir systemctl enable NetworkManager
-
-echo "✅ WiFi基础配置完成：用户可通过wpa_cli/nmcli配置WiFi"
-# ======================================================================
-
 
 # Create fstab
 echo "📋 创建文件系统表..."
