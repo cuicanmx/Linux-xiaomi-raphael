@@ -425,6 +425,7 @@ deb http://mirrors.ustc.edu.cn/debian/ trixie main contrib non-free non-free-fir
 deb http://mirrors.ustc.edu.cn/debian/ trixie-updates main contrib non-free non-free-firmware
 
 deb http://mirrors.ustc.edu.cn/debian/ trixie-backports main contrib non-free non-free-firmware
+
 deb http://security.debian.org/debian-security/ trixie-security main contrib non-free non-free-firmware
 EOF
     echo_success "✅ 中国源配置完成"
