@@ -815,10 +815,11 @@ main() {
     
     # 最终处理
     adjust_filesystem_uuid
-    
+
     if ! generate_boot_image; then
         log_warning "⚠️ boot镜像生成失败，但继续构建流程"
     fi
+    
     create_archive
     
     # 打印总结
