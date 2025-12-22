@@ -184,10 +184,14 @@ fi
 
 # 安装内核包
 echo "📦 安装内核包..."
+# 将内核包复制到chroot环境
+mkdir -p rootdir/tmp/kernel-packages
+cp *.deb rootdir/tmp/kernel-packages/
+
 for pkg in *.deb; do
     if [ -f "$pkg" ]; then
         echo "安装: $pkg"
-        if chroot rootdir dpkg -i "/$pkg"; then
+        if chroot rootdir dpkg -i "/tmp/kernel-packages/$pkg"; then
             echo "✅ $pkg 安装成功"
         else
             echo "❌ $pkg 安装失败"
@@ -195,6 +199,9 @@ for pkg in *.deb; do
         fi
     fi
 done
+
+# 清理临时文件
+rm -rf rootdir/tmp/kernel-packages
 
 echo "✅ 所有内核包安装完成"
 
