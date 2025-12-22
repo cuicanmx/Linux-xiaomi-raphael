@@ -234,7 +234,9 @@ fi
 
 # 同步时间
 echo_info "⏰ 同步时间..."
-chroot rootdir timedatectl set-ntp true
+# 在chroot环境中使用timedatectl需要systemd作为init系统，这里改用ntpdate
+chroot rootdir apt install -y ntpdate
+chroot rootdir ntpdate pool.ntp.org
 echo_success "✅ 时间同步完成"
 
 # Install device-specific packages
