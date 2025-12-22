@@ -20,16 +20,13 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
-      - name: "💾 设置ccache缓存 (先于构建工具)"
+      - name: "💾 设置ccache缓存"
         uses: actions/cache@v4
         id: cache-ccache
         with:
           path: /home/runner/.ccache
-          # 优化: 使用更稳定的缓存键，包含内核版本和分支名
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
-          # 优化: 更智能的缓存恢复策略，优先匹配同内核版本和分支
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}
           restore-keys: |
-            ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-
             ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
             ${{ runner.os }}-ccache-kernel-
 
@@ -93,12 +90,11 @@ jobs:
           ccache --show-stats --verbose | grep -E "(hit rate|cache hit|cache miss)" || true
 
       - name: "💾 保存ccache缓存"
-        # 只有当缓存未命中时才保存新缓存，避免冲突
         if: always() && steps.cache-ccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: /home/runner/.ccache
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}
 
       - name: "📦 收集编译产物"
         id: collect_artifacts
