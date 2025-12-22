@@ -410,18 +410,28 @@ if [ "$distro_variant" = "desktop" ]; then
 fi
 
 # 配置中国源
-if [ "$USE_CHINA_MIRROR" = "true" ]; then
-    echo -e "${CYAN}🔧 配置中国源 (USTC)${NC}"
+if [ "$USE_CHINA_MIRROR" = "true" ] || [ "$USE_CHINA_MIRROR" = "True" ] || [ "$USE_CHINA_MIRROR" = "1" ]; then
+    echo_info "🔧 配置中国源 (USTC)"
+    # 备份原始源列表
+    if [ -f rootdir/etc/apt/sources.list ]; then
+        cp rootdir/etc/apt/sources.list rootdir/etc/apt/sources.list.bak
+        echo_info "📋 已备份原始源列表到 sources.list.bak"
+    fi
+    
+    # 写入新的源列表
     cat > rootdir/etc/apt/sources.list << 'EOF'
 deb http://mirrors.ustc.edu.cn/debian/ trixie main contrib non-free non-free-firmware
 
 deb http://mirrors.ustc.edu.cn/debian/ trixie-updates main contrib non-free non-free-firmware
 
 deb http://mirrors.ustc.edu.cn/debian/ trixie-backports main contrib non-free non-free-firmware
-
-deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security/ trixie-security main contrib non-free non-free-firmware
 EOF
-    echo -e "${GREEN}✅ 中国源配置完成${NC}"
+    echo_success "✅ 中国源配置完成"
+    
+    # 显示配置的源列表
+    echo_info "📋 当前配置的源列表:"
+    cat rootdir/etc/apt/sources.list
     
     # 更新源列表
     echo -e "${CYAN}🔄 更新软件包列表...${NC}"
@@ -434,7 +444,6 @@ fi
 
 # 清理
 echo "🧹 清理系统..."
-chroot rootdir apt autoremove -y --purge ufw 
 chroot rootdir apt clean all
 
 echo "✅ 系统清理完成"
