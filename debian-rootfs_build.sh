@@ -13,7 +13,7 @@ readonly HOSTNAME="xiaomi-raphael"
 
 # 包列表 - 移除了ncurses-term和ncurses-base
 readonly BASE_PACKAGES=(
-    systemd udev dbus bash-completion net-tools
+    systemd udev dbus 
     systemd-resolved wpasupplicant iw iproute2 sudo
     openssh-server openssh-client chrony
     vim wget curl iputils-ping
