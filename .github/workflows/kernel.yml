@@ -26,7 +26,7 @@ jobs:
         with:
           path: /home/runner/.ccache
           # 优化: 使用更稳定的缓存键，包含内核版本和分支名
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
           # 优化: 更智能的缓存恢复策略，优先匹配同内核版本和分支
           restore-keys: |
             ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-
@@ -98,7 +98,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: /home/runner/.ccache
-          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}
+          key: ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: "📦 收集编译产物"
         id: collect_artifacts
