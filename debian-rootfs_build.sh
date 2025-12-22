@@ -2,16 +2,8 @@
 set -euo pipefail
 
 # ======================== 配置部分 ========================
-# 终端配置
-export TERM=xterm
-export COLORTERM=truecolor
-
-# 颜色定义
-readonly RED='\033[0;31m'
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
-readonly NC='\033[0m'
+# 终端配置 - 使用最简单的终端类型
+export TERM=vt100
 
 # 全局变量
 readonly IMAGE_SIZE="6G"
@@ -19,7 +11,7 @@ readonly FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 readonly ROOT_PASSWORD="1234"
 readonly HOSTNAME="xiaomi-raphael"
 
-# 包列表
+# 包列表 - 移除了ncurses-term和ncurses-base
 readonly BASE_PACKAGES=(
     systemd udev dbus bash-completion net-tools
     systemd-resolved wpasupplicant iw iproute2 sudo
@@ -27,7 +19,6 @@ readonly BASE_PACKAGES=(
     vim wget curl iputils-ping
     network-manager wireless-regdb
     alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools ca-certificates
-    ncurses-term ncurses-base
 )
 
 readonly KERNEL_PACKAGES=(
@@ -38,21 +29,21 @@ readonly KERNEL_PACKAGES=(
 
 # ======================== 函数定义 ========================
 
-# 日志函数
+# 日志函数 - 去掉所有颜色
 log_info() {
-    echo -e "${BLUE}[INFO] $(date +'%Y-%m-%d %H:%M:%S')${NC} $1"
+    echo "[INFO] $(date +'%Y-%m-%d %H:%M:%S') $1"
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS] $(date +'%Y-%m-%d %H:%M:%S')${NC} $1"
+    echo "[SUCCESS] $(date +'%Y-%m-%d %H:%M:%S') $1"
 }
 
 log_warning() {
-    echo -e "${YELLOW}[WARNING] $(date +'%Y-%m-%d %H:%M:%S')${NC} $1"
+    echo "[WARNING] $(date +'%Y-%m-%d %H:%M:%S') $1"
 }
 
 log_error() {
-    echo -e "${RED}[ERROR] $(date +'%Y-%m-%d %H:%M:%S')${NC} $1"
+    echo "[ERROR] $(date +'%Y-%m-%d %H:%M:%S') $1" >&2
     return 1
 }
 
@@ -222,34 +213,24 @@ mount_virtual_filesystems() {
     log_success "虚拟文件系统挂载完成"
 }
 
-# 在chroot环境中执行命令
+# 在chroot环境中执行命令 - 使用简单终端
 run_in_chroot() {
-    chroot rootdir bash -c "$1"
+    TERM=vt100 chroot rootdir bash -c "$1"
 }
 
-# 配置终端环境
+# 配置终端环境 - 简化版本
 configure_terminal() {
     log_info "配置终端环境..."
     
-    # 创建terminfo目录
-    mkdir -p rootdir/usr/share/terminfo/x
-    
-    # 创建基本的终端定义
-    cat > rootdir/usr/share/terminfo/x/xterm << 'EOF'
-xterm|xterm terminal emulator (X Window System),
-EOF
-    
-    cat > rootdir/usr/share/terminfo/x/xterm-256color << 'EOF'
-xterm-256color|xterm with 256 colors,
-EOF
-    
-    # 设置环境变量
+    # 设置环境变量使用最简单的终端
     cat > rootdir/etc/environment << EOF
-TERM=xterm
-COLORTERM=truecolor
+TERM=vt100
 LC_ALL=C.UTF-8
 LANG=C.UTF-8
 EOF
+    
+    # 在bashrc中也设置，确保登录后生效
+    echo 'export TERM=vt100' >> rootdir/etc/bash.bashrc
     
     log_success "终端环境配置完成"
 }
@@ -386,14 +367,14 @@ update_initramfs() {
     log_success "initramfs更新完成"
 }
 
-# 生成boot镜像
+# 生成boot镜像 - 简化版，不添加表情符号
 generate_boot_image() {
     if [[ "$DISTRO_TYPE" != "debian" ]] || [[ "$DISTRO_VARIANT" != "server" ]]; then
         log_info "当前构建 $DISTRO_TYPE-$DISTRO_VARIANT，跳过boot镜像生成"
         return 0
     fi
     
-    log_info "📦 生成boot镜像..."
+    log_info "生成boot镜像..."
     
     local boot_img="xiaomi-k20pro-boot.img"
     local boot_mount="boot_tmp"
@@ -402,193 +383,94 @@ generate_boot_image() {
     rm -rf "$boot_mount"
     rm -f "$boot_img" 2>/dev/null || true
     
-    # 1. 下载boot镜像（添加重试和错误处理）
-    log_info "📥 下载boot镜像..."
-    local max_retries=3
-    local retry_count=0
-    local download_success=false
+    # 1. 下载boot镜像
+    log_info "下载boot镜像..."
     
-    while [[ $retry_count -lt $max_retries ]]; do
-        log_info "尝试下载boot镜像 (第 $((retry_count+1))/$max_retries 次)..."
-        
-        if wget -q --show-progress --timeout=30 \
-               https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img; then
-            download_success=true
-            break
-        else
-            retry_count=$((retry_count + 1))
-            if [[ $retry_count -lt $max_retries ]]; then
-                log_warning "下载失败，10秒后重试..."
-                sleep 10
-            fi
-        fi
-    done
-    
-    if [[ "$download_success" != "true" ]]; then
-        log_error "❌ boot镜像下载失败，跳过boot镜像生成"
-        # 不是致命错误，继续构建
+    if wget -q --timeout=30 \
+           https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img; then
+        log_success "boot镜像下载完成"
+    else
+        log_warning "boot镜像下载失败，跳过boot镜像生成"
         return 0
     fi
     
     # 2. 验证下载的文件
     if [[ ! -f "$boot_img" ]]; then
-        log_error "❌ 下载的boot镜像文件不存在"
+        log_warning "下载的boot镜像文件不存在，跳过boot镜像生成"
         return 0
     fi
-    
-    local file_size=$(stat -c%s "$boot_img" 2>/dev/null || echo "0")
-    if [[ $file_size -lt 1000000 ]]; then
-        log_error "❌ boot镜像文件大小异常 (${file_size}字节)"
-        rm -f "$boot_img"
-        return 0
-    fi
-    
-    log_success "✅ boot镜像下载完成 (${file_size}字节)"
     
     # 3. 检查rootdir/boot目录是否存在
     if [[ ! -d "rootdir/boot" ]]; then
-        log_error "❌ rootdir/boot 目录不存在"
-        log_info "rootdir/boot 目录内容:"
-        ls -la rootdir/ 2>/dev/null || echo "无法访问rootdir"
+        log_warning "rootdir/boot 目录不存在，跳过boot镜像生成"
         return 0
     fi
     
     # 4. 检查内核文件是否存在
-    log_info "🔍 检查内核文件..."
-    local files_found=()
-    local files_missing=()
+    log_info "检查内核文件..."
     
-    # 检查设备树
-    if [[ -d "rootdir/boot/dtbs/qcom" ]]; then
-        files_found+=("设备树: rootdir/boot/dtbs/qcom")
-    else
-        files_missing+=("设备树目录")
-        log_warning "⚠️ 未找到设备树目录: rootdir/boot/dtbs/qcom"
-        log_info "可用的设备树目录:"
-        find rootdir/boot/dtbs -type d 2>/dev/null | head -10 || echo "无设备树目录"
-    fi
-    
-    # 检查配置文件
-    local config_files=(rootdir/boot/config-*)
-    if [[ -e "${config_files[0]}" ]]; then
-        files_found+=("内核配置: ${config_files[0]}")
-    else
-        files_missing+=("内核配置文件")
-        log_warning "⚠️ 未找到内核配置文件"
-        log_info "boot目录内容:"
-        ls -la rootdir/boot/ 2>/dev/null || echo "无法访问boot目录"
-    fi
-    
-    # 检查initrd
-    local initrd_files=(rootdir/boot/initrd.img-*)
-    if [[ -e "${initrd_files[0]}" ]]; then
-        files_found+=("initrd: ${initrd_files[0]}")
-    else
-        files_missing+=("initrd文件")
-    fi
-    
-    # 检查vmlinuz
-    local vmlinuz_files=(rootdir/boot/vmlinuz-*)
-    if [[ -e "${vmlinuz_files[0]}" ]]; then
-        files_found+=("vmlinuz: ${vmlinuz_files[0]}")
-    else
-        files_missing+=("vmlinuz文件")
-    fi
-    
-    # 如果有文件缺失，跳过boot镜像生成
-    if [[ ${#files_missing[@]} -gt 0 ]]; then
-        log_error "❌ 缺少必要的内核文件，跳过boot镜像生成"
-        log_info "已找到的文件:"
-        for file in "${files_found[@]}"; do
-            echo "  ✅ $file"
-        done
-        log_info "缺失的文件:"
-        for file in "${files_missing[@]}"; do
-            echo "  ❌ $file"
-        done
+    # 如果任何关键文件缺失，跳过
+    if [[ ! -d "rootdir/boot/dtbs/qcom" ]] || \
+       ! ls rootdir/boot/config-* >/dev/null 2>&1 || \
+       ! ls rootdir/boot/initrd.img-* >/dev/null 2>&1 || \
+       ! ls rootdir/boot/vmlinuz-* >/dev/null 2>&1; then
+        log_warning "缺少必要的内核文件，跳过boot镜像生成"
         return 0
     fi
     
     # 5. 创建挂载点并挂载
-    log_info "🔧 准备挂载boot镜像..."
+    log_info "准备挂载boot镜像..."
     mkdir -p "$boot_mount"
     
     if ! mount -o loop "$boot_img" "$boot_mount" 2>/dev/null; then
-        log_error "❌ boot镜像挂载失败"
-        log_info "尝试修复boot镜像..."
-        # 尝试使用losetup手动挂载
-        local loop_device=$(losetup -f 2>/dev/null || echo "/dev/loop0")
-        if losetup "$loop_device" "$boot_img" 2>/dev/null; then
-            if mount "$loop_device" "$boot_mount" 2>/dev/null; then
-                log_success "✅ 使用losetup挂载成功"
-            else
-                losetup -d "$loop_device" 2>/dev/null
-                log_error "❌ 修复挂载失败，跳过boot镜像生成"
-                return 0
-            fi
-        else
-            log_error "❌ 无法设置loop设备，跳过boot镜像生成"
-            return 0
-        fi
+        log_warning "boot镜像挂载失败，跳过boot镜像生成"
+        return 0
     fi
     
-    log_success "✅ boot镜像挂载成功"
+    log_success "boot镜像挂载成功"
     
-    # 6. 复制文件（使用具体的文件而不是通配符）
-    log_info "📋 复制内核文件到boot镜像..."
+    # 6. 复制文件
+    log_info "复制内核文件到boot镜像..."
     
     # 复制设备树
     if [[ -d "rootdir/boot/dtbs/qcom" ]]; then
         mkdir -p "$boot_mount/dtbs/"
         cp -r "rootdir/boot/dtbs/qcom" "$boot_mount/dtbs/"
-        log_success "✅ 复制设备树完成"
     fi
     
     # 复制配置文件（使用第一个找到的）
     local config_file=$(ls rootdir/boot/config-* 2>/dev/null | head -1)
     if [[ -f "$config_file" ]]; then
         cp "$config_file" "$boot_mount/"
-        log_success "✅ 复制内核配置完成"
     fi
     
     # 复制initrd（使用第一个找到的）
     local initrd_file=$(ls rootdir/boot/initrd.img-* 2>/dev/null | head -1)
     if [[ -f "$initrd_file" ]]; then
         cp "$initrd_file" "$boot_mount/initramfs"
-        log_success "✅ 复制initrd完成"
     fi
     
     # 复制vmlinuz（使用第一个找到的）
     local vmlinuz_file=$(ls rootdir/boot/vmlinuz-* 2>/dev/null | head -1)
     if [[ -f "$vmlinuz_file" ]]; then
         cp "$vmlinuz_file" "$boot_mount/linux.efi"
-        log_success "✅ 复制vmlinuz完成"
     fi
     
     # 7. 卸载并清理
-    log_info "🔓 卸载boot镜像..."
+    log_info "卸载boot镜像..."
     
-    # 确保所有进程停止使用挂载点
-    fuser -km "$boot_mount" 2>/dev/null || true
-    sleep 2
-    
-    if umount "$boot_mount" 2>/dev/null; then
-        log_success "✅ boot镜像卸载成功"
-    else
-        log_warning "⚠️ 正常卸载失败，尝试强制卸载"
-        umount -l "$boot_mount" 2>/dev/null || true
-    fi
+    sleep 1
+    umount "$boot_mount" 2>/dev/null || umount -l "$boot_mount" 2>/dev/null || true
     
     # 清理临时目录
     rm -rf "$boot_mount"
     
     # 检查boot镜像是否还存在
     if [[ -f "$boot_img" ]]; then
-        local final_size=$(stat -c%s "$boot_img")
-        log_success "🎉 boot镜像生成完成 (${final_size}字节)"
+        log_success "boot镜像生成完成"
         return 0
     else
-        log_error "❌ boot镜像文件丢失"
+        log_warning "boot镜像文件丢失"
         return 0
     fi
 }
@@ -739,15 +621,15 @@ create_archive() {
 
 # 打印构建总结
 print_summary() {
-    log_success "🎉 $DISTRO_TYPE-$DISTRO_VARIANT IMG镜像构建完成！"
+    log_success "$DISTRO_TYPE-$DISTRO_VARIANT IMG镜像构建完成！"
     
     if [[ "$DISTRO_VARIANT" == "desktop" ]]; then
-        log_info "📝 桌面环境说明:"
+        log_info "桌面环境说明:"
         log_info "   - 默认显示管理器: GDM (GNOME Display Manager)"
         log_info "   - 登录账户: root/$ROOT_PASSWORD"
         log_info "   - 首次登录后会显示GNOME初始设置向导"
     else
-        log_info "📝 服务器环境说明:"
+        log_info "服务器环境说明:"
         log_info "   - SSH服务已启用，监听所有IP地址"
         log_info "   - 登录账户: root/$ROOT_PASSWORD"
         log_info "   - 网络接口已配置为自动获取IP"
@@ -815,11 +697,11 @@ main() {
     
     # 最终处理
     adjust_filesystem_uuid
-
-    if ! generate_boot_image; then
-        log_warning "⚠️ boot镜像生成失败，但继续构建流程"
-    fi
     
+    # 尝试生成boot镜像，但不强制
+    generate_boot_image
+    
+    # 创建压缩包
     create_archive
     
     # 打印总结
