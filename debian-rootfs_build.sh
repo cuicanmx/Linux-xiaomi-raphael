@@ -181,13 +181,13 @@ base_packages=(
     # 网络基础（强制DHCP+WiFi）
     systemd-resolved wpasupplicant iw iproute2 sudo
     # SSH依赖
-    openssh-server openssh-client ntpsec-ntpdate
+    openssh-server openssh-client chrony
     # 基础工具
     vim wget curl iputils-ping
     # WiFi配置工具
     network-manager wireless-regdb 
     # 音频/硬件兼容
-    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools
+    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools ca-certificates
 )
 
 echo_info "执行命令: chroot rootdir apt install -y --no-install-recommends ${base_packages[*]}"
@@ -234,9 +234,8 @@ fi
 
 # 同步时间
 echo_info "⏰ 同步时间..."
-# 在chroot环境中使用timedatectl需要systemd作为init系统，这里改用ntpsec-ntpdate
-chroot rootdir apt install -y ntpsec-ntpdate
-chroot rootdir ntpdate pool.ntp.org
+chroot rootdir systemctl enable chrony
+chroot rootdir systemctl start chrony
 echo_success "✅ 时间同步完成"
 
 # Install device-specific packages
