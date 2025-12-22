@@ -25,8 +25,7 @@ on:
 
 env:
   DEFAULT_KERNEL: '6.18'
-  BUILD_TIMEOUT_MINUTES: 120
-  TERM: xterm  # 设置终端环境变量
+  TERM: xterm
 
 jobs:
   setup:
@@ -158,6 +157,7 @@ jobs:
     
     - name: "🏗️ 执行RootFS构建"
       id: build_rootfs
+      timeout-minutes: 120  # 正确的超时设置位置
       run: |
         # 设置终端环境变量
         export TERM=xterm
@@ -267,7 +267,6 @@ jobs:
         echo "大小: $FILE_SIZE"
         echo "时间: $(date)"
         echo "========================================"
-      timeout-minutes: ${{ env.BUILD_TIMEOUT_MINUTES }}
     
     - name: "📤 上传构建产物"
       uses: actions/upload-artifact@v4
