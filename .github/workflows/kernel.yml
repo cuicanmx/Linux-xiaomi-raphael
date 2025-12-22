@@ -93,8 +93,8 @@ jobs:
           ccache --show-stats --verbose | grep -E "(hit rate|cache hit|cache miss)" || true
 
       - name: "💾 保存ccache缓存"
-        # 无论编译是否成功都保存缓存，确保下次构建能利用已有缓存
-        if: always()
+        # 只有当缓存未命中时才保存新缓存，避免冲突
+        if: always() && steps.cache-ccache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: /home/runner/.ccache
