@@ -239,7 +239,10 @@ chroot rootdir apt clean
 chroot rootdir rm -rf /var/lib/apt/lists/*
 
 echo "✅ 系统清理完成"
-
+echo "🔓 卸载rootfs.img..."
+if mountpoint -q "rootdir"; then
+    umount "rootdir" || echo "⚠️  无法卸载 rootdir"
+fi
 # 卸载挂载点
 echo "🔌 卸载挂载点..."
 umount rootdir/sys

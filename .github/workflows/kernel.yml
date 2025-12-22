@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "⚙️ 正在安装必要的构建工具..."
           sudo apt update
-          sudo apt install -y build-essential flex bison libssl-dev libelf-dev bc ccache
+          sudo apt install -y build-essential flex bison libssl-dev libelf-dev bc ccache clang llvm lld
           echo "✅ 构建工具安装完成"
           
           echo "📦 检查ccache状态..."
@@ -74,13 +74,16 @@ jobs:
           export CCACHE_MAXSIZE=10G
           export PATH="/usr/lib/ccache:$PATH"
           
-          # 检查是否实际使用了ccache
+          # 检查编译器是否使用ccache包装
           echo "检查编译器是否使用ccache包装:"
-          which gcc
-          gcc --version | head -1
+          which clang
+          clang --version
+          echo "ccache配置:"
+          ccache --show-config | head -1
           
           # 执行编译
-          sudo bash raphael-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}"
+          # 传递环境变量给编译脚本
+          sudo -E bash raphael-kernel_build.sh "${{ github.event.inputs.kernel_version || '6.18' }}"
           
           echo "✅ 内核编译完成"
           echo "📊 编译后ccache统计:"

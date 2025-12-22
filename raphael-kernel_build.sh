@@ -1,10 +1,17 @@
-apt update
-apt install -qq -y clang llvm lld
 # 设置ccache环境变量
 export CCACHE_DIR="${CCACHE_DIR:-/home/runner/.ccache}"
 export CCACHE_MAXSIZE="10G"
 # 兼容旧版本ccache，不使用CCACHE_COMPRESS
 export CCACHE_SLOPPINESS="file_macro,locale,time_macros"
+# 确保ccache优先使用clang
+export CC="ccache clang"
+export CXX="ccache clang++"
+export AR="llvm-ar"
+export NM="llvm-nm"
+export OBJCOPY="llvm-objcopy"
+export OBJDUMP="llvm-objdump"
+export READELF="llvm-readelf"
+export STRIP="llvm-strip"
 
 # 确保ccache目录存在
 mkdir -p "$CCACHE_DIR"
