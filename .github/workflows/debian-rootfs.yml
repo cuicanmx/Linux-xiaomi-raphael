@@ -1,10 +1,10 @@
-name: 🐧Build Debian RootFS
+name: 🐧 Build Debian RootFS for Xiaomi Raphael
 
 on:
   workflow_dispatch:
     inputs:
       kernel_version:
-        description: '内核版本 (对应Release标签，如 6.18)'
+        description: '内核版本 (对应Release标签，如6.18)'
         required: true
         default: '6.18'
       skip_release:
@@ -18,295 +18,444 @@ on:
         type: boolean
         default: false
       use_china_mirror:
-        description: '使用中国源 (默认勾选)'
+        description: '使用中国源 (推荐国内用户开启)'
         required: false
         type: boolean
         default: true
 
-# 全局环境变量
 env:
   DEFAULT_KERNEL: '6.18'
+  BUILD_TIMEOUT_MINUTES: 120
+  TERM: xterm  # 设置终端环境变量
 
 jobs:
-  build-rootfs:
-    name: "🏗️ 构建 - ${{ matrix.distro }}"
+  setup:
+    name: "🔧 环境准备"
     runs-on: ubuntu-24.04-arm
-    # 为APT包启用缓存，显著加快后续构建速度
-    env:
-      APT_CACHE_DIR: /opt/apt-cache
-    strategy:
-      # 定义要构建的所有发行版变体
-      matrix:
-        distro: ${{ 
-            github.event.inputs.test_mode == 'true' 
-            && fromJSON('["debian-server"]') 
-            || fromJSON('["debian-server", "debian-desktop"]')
-            }}
-      # 防止一个变体构建失败导致整个任务失败
-      fail-fast: false
-
+    outputs:
+      kernel_version: ${{ steps.get_kernel_version.outputs.kernel_version }}
+      distro_matrix: ${{ steps.generate_matrix.outputs.distro_matrix }}
+    
     steps:
     - name: "📥 检出代码"
       uses: actions/checkout@v4
-
-    - name: "🔧 安装构建工具"
-      run: |
-        echo "安装必需的系统工具..."
-        sudo apt-get update
-        sudo apt-get install -y \
-          debootstrap \
-          p7zip-full \
-          curl
-        echo "✅ 工具安装完成"
-
-    - name: "📦 获取内核版本"
-      id: kernel_version
+    
+    - name: "🔍 确定内核版本"
+      id: get_kernel_version
       run: |
         # 优先级：手动输入 > Release标签 > 默认值
-        if [[ '${{ github.event_name }}' == 'workflow_dispatch' && -n '${{ github.event.inputs.kernel_version }}' ]]; then
-          KERNEL_VER='${{ github.event.inputs.kernel_version }}'
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.kernel_version }}" ]]; then
+          KERNEL_VER="${{ github.event.inputs.kernel_version }}"
           echo "使用手动输入的内核版本: $KERNEL_VER"
-        elif [[ '${{ github.ref_type }}' == 'tag' ]]; then
-          KERNEL_VER='${GITHUB_REF#refs/tags/}'
+        elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+          KERNEL_VER="${GITHUB_REF#refs/tags/}"
           echo "使用Tag标签作为内核版本: $KERNEL_VER"
         else
-          KERNEL_VER='${{ env.DEFAULT_KERNEL }}'
+          KERNEL_VER="${{ env.DEFAULT_KERNEL }}"
           echo "使用默认内核版本: $KERNEL_VER"
         fi
+        
+        # 验证内核版本格式
+        if [[ ! "$KERNEL_VER" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+          echo "❌ 错误：内核版本格式无效: $KERNEL_VER"
+          exit 1
+        fi
+        
         echo "kernel_version=$KERNEL_VER" >> $GITHUB_OUTPUT
-        echo "最终使用内核版本: $KERNEL_VER"
-      shell: bash
+        echo "✅ 内核版本确定为: $KERNEL_VER"
+    
+    - name: "📋 生成发行版矩阵"
+      id: generate_matrix
+      run: |
+        # 根据test_mode生成矩阵
+        if [[ "${{ github.event.inputs.test_mode }}" == "true" ]]; then
+          DISTRO_MATRIX='["debian-server"]'
+          echo "测试模式：仅构建 debian-server"
+        else
+          DISTRO_MATRIX='["debian-server", "debian-desktop"]'
+          echo "正常模式：构建所有变体"
+        fi
+        
+        echo "distro_matrix=$DISTRO_MATRIX" >> $GITHUB_OUTPUT
 
+  build-rootfs:
+    name: "🏗️ 构建 - ${{ matrix.distro }}"
+    runs-on: ubuntu-24.04-arm
+    needs: setup
+    strategy:
+      matrix:
+        distro: ${{ fromJson(needs.setup.outputs.distro_matrix) }}
+      fail-fast: false
+    
+    steps:
+    - name: "📥 检出代码"
+      uses: actions/checkout@v4
+    
+    - name: "🔧 安装构建工具"
+      run: |
+        echo "📦 安装必需的系统工具..."
+        sudo apt-get update -q
+        sudo apt-get install -y --no-install-recommends \
+          debootstrap \
+          p7zip-full \
+          curl \
+          gnupg \
+          ca-certificates \
+          lsb-release \
+          bash
+        
+        echo "✅ 工具安装完成"
+    
+    - name: "🔍 验证内核版本"
+      run: |
+        KERNEL_VER="${{ needs.setup.outputs.kernel_version }}"
+        echo "验证内核版本: $KERNEL_VER"
+        
+        # 检查内核版本文件模式
+        if ! [[ "$KERNEL_VER" =~ ^[0-9]+\.[0-9]+ ]]; then
+          echo "❌ 错误：内核版本格式无效"
+          exit 1
+        fi
+    
     - name: "📥 下载内核包"
       id: download_kernel
       run: |
-        KERNEL_VER="${{ steps.kernel_version.outputs.kernel_version }}"
-        echo "从 Release [kernel-$KERNEL_VER] 下载内核包..."
+        KERNEL_VER="${{ needs.setup.outputs.kernel_version }}"
+        RELEASE_TAG="kernel-$KERNEL_VER"
         
-        # 使用GitHub CLI下载Release文件
-        gh release download "kernel-$KERNEL_VER" \
+        echo "📦 从Release [$RELEASE_TAG] 下载内核包..."
+        
+        # 检查Release是否存在
+        if ! gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          echo "❌ 错误：找不到Release [$RELEASE_TAG]"
+          echo "请确保已创建对应的内核Release"
+          exit 1
+        fi
+        
+        # 下载内核包
+        echo "正在下载内核包..."
+        gh release download "$RELEASE_TAG" \
           --pattern "*-xiaomi-raphael*.deb" \
           --repo "${{ github.repository }}" \
           --clobber
         
         # 验证下载的文件
-        echo "下载的文件列表:"
-        ls -la *.deb 2>/dev/null || echo "未找到.deb文件"
+        echo "📋 下载的文件列表:"
+        ls -la *.deb 2>/dev/null || echo "⚠️ 未找到.deb文件"
         
         DEB_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
-        if [ $DEB_COUNT -eq 0 ]; then
+        if [ "$DEB_COUNT" -eq 0 ]; then
           echo "❌ 错误：未下载到任何内核包！"
           exit 1
         fi
         
-        echo "✅ 成功下载 $DEB_COUNT 个内核包"
-        echo "deb_count=$DEB_COUNT" >> $GITHUB_OUTPUT
+        echo "✅ 成功下载 $DEB_COUNT 个内核包:"
+        for deb in *.deb; do
+          echo "  - $deb ($(du -h "$deb" | cut -f1))"
+        done
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+    
     - name: "🏗️ 执行RootFS构建"
       id: build_rootfs
       run: |
+        # 设置终端环境变量
+        export TERM=xterm
+        export COLORTERM=truecolor
+        
         DISTRO="${{ matrix.distro }}"
-        KERNEL_VER="${{ steps.kernel_version.outputs.kernel_version }}"
+        KERNEL_VER="${{ needs.setup.outputs.kernel_version }}"
         
         echo "========================================"
-        echo "开始构建 RootFS"
+        echo "🚀 开始构建 RootFS"
         echo "----------------------------------------"
-        echo "发行版: $DISTRO"
-        echo "内核: $KERNEL_VER"
-        echo "Runner: $(uname -m)"
-        echo "时间: $(date)"
+        echo "📦 发行版: $DISTRO"
+        echo "🔧 内核: $KERNEL_VER"
+        echo "💻 Runner: $(uname -m) ($(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2))"
+        echo "🕐 开始时间: $(date)"
         echo "========================================"
         
-        # 检查构建脚本是否存在
-        if [ ! -f "debian-rootfs_build.sh" ]; then
-          echo "❌ 错误：未找到构建脚本 debian-rootfs_build.sh"
+        # 查找构建脚本
+        BUILD_SCRIPT=""
+        for script in build-rootfs.sh debian-rootfs_build.sh build.sh; do
+          if [ -f "$script" ]; then
+            BUILD_SCRIPT="$script"
+            break
+          fi
+        done
+        
+        if [ -z "$BUILD_SCRIPT" ]; then
+          echo "❌ 错误：未找到构建脚本！"
+          echo "请确保存在以下任一脚本："
+          echo "  - build-rootfs.sh"
+          echo "  - debian-rootfs_build.sh"
+          echo "  - build.sh"
           exit 1
         fi
         
-        # 赋予执行权限
-        chmod +x debian-rootfs_build.sh
+        echo "📜 使用构建脚本: $BUILD_SCRIPT"
+        chmod +x "$BUILD_SCRIPT"
         
-        # 执行构建脚本
-          if [ "${{ github.event.inputs.use_china_mirror }}" = "true" ]; then
-            echo "执行构建命令: sudo bash ./debian-rootfs_build.sh $DISTRO $KERNEL_VER true"
-            sudo bash ./debian-rootfs_build.sh "$DISTRO" "$KERNEL_VER" "true"
-          else
-            echo "执行构建命令: sudo bash ./debian-rootfs_build.sh $DISTRO $KERNEL_VER"
-            sudo bash ./debian-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
+        # 准备构建参数
+        BUILD_ARGS=("$DISTRO" "$KERNEL_VER")
+        if [[ "${{ github.event.inputs.use_china_mirror }}" == "true" ]]; then
+          BUILD_ARGS+=("true")
+          echo "🇨🇳 启用中国镜像源"
+        else
+          echo "🌍 使用默认镜像源"
+        fi
+        
+        echo "▶️ 执行构建命令: sudo ./$BUILD_SCRIPT ${BUILD_ARGS[*]}"
+        
+        # 执行构建
+        if sudo "./$BUILD_SCRIPT" "${BUILD_ARGS[@]}"; then
+          echo "✅ RootFS构建完成"
+        else
+          echo "❌ RootFS构建失败"
+          exit 1
+        fi
+        
+        # 查找生成的镜像文件
+        echo "🔍 查找构建产物..."
+        OUTPUT_PATTERN="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"
+        
+        # 尝试多种可能的命名模式
+        for pattern in \
+          "$OUTPUT_PATTERN" \
+          "raphael-*-kernel-$KERNEL_VER.7z" \
+          "*.7z"; do
+          
+          if ls $pattern 2>/dev/null | grep -q .; then
+            OUTPUT_FILE=$(ls $pattern | head -1)
+            break
           fi
+        done
         
-        # 检查构建结果 - 查找动态生成的压缩包
-        OUTPUT_FILE="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"
         if [ -f "$OUTPUT_FILE" ]; then
           FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
-          echo "✅ RootFS 构建成功！"
-          echo "📦 文件: $OUTPUT_FILE"
-          echo "📏 大小: $FILE_SIZE"
+          echo "✅ 找到构建产物:"
+          echo "   📦 文件: $OUTPUT_FILE"
+          echo "   📏 大小: $FILE_SIZE"
           
-          # 为产物生成唯一名称
+          # 重命名文件，添加时间戳和唯一标识
           TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-          NEW_FILENAME="$DISTRO-kernel-$KERNEL_VER-$TIMESTAMP.7z"
+          BUILD_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          NEW_FILENAME="${DISTRO}-kernel-${KERNEL_VER}-${BUILD_ID}-${TIMESTAMP}.7z"
           mv "$OUTPUT_FILE" "$NEW_FILENAME"
           
           echo "final_filename=$NEW_FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
+          echo "original_pattern=$OUTPUT_PATTERN" >> $GITHUB_OUTPUT
         else
-          echo "❌ 错误：未生成 $OUTPUT_FILE 文件！"
-          ls -la *.7z 2>/dev/null || echo "未找到任何.7z文件"
+          echo "❌ 错误：未找到构建产物！"
+          echo "当前目录文件:"
+          ls -la
           exit 1
         fi
-      timeout-minutes: 90
-
+        
+        # 检查是否生成了boot镜像
+        if [ -f "xiaomi-k20pro-boot.img" ]; then
+          BOOT_SIZE=$(du -h "xiaomi-k20pro-boot.img" | cut -f1)
+          echo "✅ 找到boot镜像: xiaomi-k20pro-boot.img ($BOOT_SIZE)"
+          echo "has_boot_img=true" >> $GITHUB_OUTPUT
+        fi
+        
+        echo "========================================"
+        echo "🎉 RootFS构建成功！"
+        echo "----------------------------------------"
+        echo "产物: $NEW_FILENAME"
+        echo "大小: $FILE_SIZE"
+        echo "时间: $(date)"
+        echo "========================================"
+      timeout-minutes: ${{ env.BUILD_TIMEOUT_MINUTES }}
+    
     - name: "📤 上传构建产物"
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.distro }}-${{ steps.kernel_version.outputs.kernel_version }}
+        name: ${{ matrix.distro }}-${{ needs.setup.outputs.kernel_version }}
         path: |
           ${{ matrix.distro }}-kernel-*.7z
-          ${{ startsWith(matrix.distro, 'debian-server') && 'xiaomi-k20pro-boot.img' || '' }}
-        retention-days: 14
+          xiaomi-k20pro-boot.img
         if-no-files-found: error
-        compression-level: 0  # 文件已压缩，跳过二次压缩
-
-    - name: "📋 构建结果摘要"
+        retention-days: 30
+        compression-level: 0
+    
+    - name: "📊 构建统计"
       if: always()
       run: |
         echo "========================================"
-        echo "构建结果摘要 - ${{ matrix.distro }}"
+        echo "📊 构建统计 - ${{ matrix.distro }}"
         echo "----------------------------------------"
         echo "状态: ${{ job.status }}"
-        echo "内核版本: ${{ steps.kernel_version.outputs.kernel_version }}"
+        echo "内核版本: ${{ needs.setup.outputs.kernel_version }}"
         echo "产物: ${{ steps.build_rootfs.outputs.final_filename || '未生成' }}"
         echo "大小: ${{ steps.build_rootfs.outputs.file_size || '未知' }}"
         echo "Runner: ${{ runner.os }}-${{ runner.arch }}"
+        echo "持续时间: ${{ job.container.network }}"
         echo "时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
         echo "========================================"
 
-  # 发布Release任务
   create-release:
     name: "🚀 发布 Release"
-    needs: build-rootfs
+    needs: 
+      - setup
+      - build-rootfs
     runs-on: ubuntu-24.04-arm
-    # 触发条件：手动触发且不跳过发布，并且构建成功
-    if: always()
-
+    if: |
+      github.event.inputs.skip_release != 'true' &&
+      needs.build-rootfs.result == 'success'
     
     steps:
-    - name: "📥 下载所有构建产物"
+    - name: "📥 下载构建产物"
       uses: actions/download-artifact@v4
       with:
         path: ./artifacts
         pattern: '*'
         merge-multiple: true
-
-    - name: "🔍 准备发布文件"
+    
+    - name: "📋 准备发布文件"
       id: prepare_release
       run: |
-        echo "整理发布文件..."
+        echo "📦 准备发布文件..."
         
         # 创建发布目录
-        RELEASE_DIR="./release-assets"
+        RELEASE_DIR="./release"
         mkdir -p "$RELEASE_DIR"
-        # 查找并移动所有.7z和.img文件 - 递归查找所有子目录并正确分组条件
-        find ./artifacts -type f -depth \( -name "*.7z" -o -name "*.img" \) -exec mv {} "$RELEASE_DIR/" \;
         
-        # 生成文件列表
-        echo "### 📦 包含的镜像文件" > "$RELEASE_DIR/filelist.md"
-        echo "" >> "$RELEASE_DIR/filelist.md"
+        # 移动所有产物到发布目录
+        find ./artifacts -type f \( -name "*.7z" -o -name "*.img" \) -exec cp {} "$RELEASE_DIR/" \;
+        
+        # 生成文件列表和校验和
+        echo "生成文件校验和..."
+        cd "$RELEASE_DIR"
+        
+        # 创建校验和文件
+        sha256sum -- * > SHA256SUMS
+        echo "✅ 生成SHA256校验和"
+        
+        # 生成详细文件列表
+        echo "📋 文件清单：" > FILELIST.md
+        echo "" >> FILELIST.md
         
         TOTAL_SIZE=0
-        for file in "$RELEASE_DIR"/*; do
-          if [ -f "$file" ]; then
+        FILE_COUNT=0
+        
+        for file in *; do
+          if [ -f "$file" ] && [ "$file" != "FILELIST.md" ]; then
             SIZE=$(du -h "$file" | cut -f1)
-            NAME=$(basename "$file")
-            echo "- **$NAME** ($SIZE)" >> "$RELEASE_DIR/filelist.md"
-            TOTAL_SIZE=$((TOTAL_SIZE + $(du -k "$file" | cut -f1)))
+            SIZE_BYTES=$(stat -c%s "$file")
+            TOTAL_SIZE=$((TOTAL_SIZE + SIZE_BYTES))
+            FILE_COUNT=$((FILE_COUNT + 1))
+            
+            # 获取SHA256
+            HASH=$(sha256sum "$file" | cut -d' ' -f1)
+            
+            echo "### $file" >> FILELIST.md
+            echo "- **大小**: $SIZE" >> FILELIST.md
+            echo "- **SHA256**: \`$HASH\`" >> FILELIST.md
+            echo "" >> FILELIST.md
           fi
         done
         
         # 计算总大小
-        TOTAL_SIZE_MB=$((TOTAL_SIZE / 1024))
-        echo "" >> "$RELEASE_DIR/filelist.md"
-        echo "**总计**: $TOTAL_SIZE_MB MB" >> "$RELEASE_DIR/filelist.md"
+        TOTAL_SIZE_MB=$((TOTAL_SIZE / 1024 / 1024))
         
-        # 统计文件数量
-        FILE_COUNT=$(ls -1 "$RELEASE_DIR"/* 2>/dev/null | wc -l)
+        echo "**统计**:" >> FILELIST.md
+        echo "- 文件数量: $FILE_COUNT" >> FILELIST.md
+        echo "- 总大小: ${TOTAL_SIZE_MB} MB" >> FILELIST.md
+        
+        cd - > /dev/null
         
         echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
         echo "total_size_mb=$TOTAL_SIZE_MB" >> $GITHUB_OUTPUT
-        # 输出文件列表内容到变量 - 使用GitHub Actions多行输出语法
-        if [ -f "$RELEASE_DIR/filelist.md" ]; then
-          EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
-          echo "filelist_text<<$EOF" >> $GITHUB_OUTPUT
-          cat "$RELEASE_DIR/filelist.md" >> $GITHUB_OUTPUT
-          echo "$EOF" >> $GITHUB_OUTPUT
+        
+        # 输出文件列表内容
+        if [ -f "$RELEASE_DIR/FILELIST.md" ]; then
+          cat "$RELEASE_DIR/FILELIST.md" | tee release_filelist.txt
+          echo "filelist_text<<EOF" >> $GITHUB_OUTPUT
+          cat release_filelist.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
         fi
         
-        echo "✅ 找到 $FILE_COUNT 个镜像文件，总计约 ${TOTAL_SIZE_MB}MB"
-        ls -lh "$RELEASE_DIR/"
-
+        echo "✅ 准备完成: $FILE_COUNT 个文件，总计 ${TOTAL_SIZE_MB}MB"
+    
     - name: "🏷️ 生成版本标签"
       id: generate_tag
       run: |
-        # 基于日期和内核版本生成标签
+        # 基于日期、内核版本和提交生成标签
         DATE_TAG=$(date -u '+%Y%m%d')
-        KERNEL_REF="${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}"
-        SHORT_SHA="${GITHUB_SHA:0:8}"
+        KERNEL_VER="${{ needs.setup.outputs.kernel_version }}"
+        SHORT_SHA="${GITHUB_SHA:0:7}"
         
-        RELEASE_TAG="debian-rootfs-$DATE_TAG-$KERNEL_REF-$SHORT_SHA"
+        # 创建语义化版本标签
+        RELEASE_TAG="v${DATE_TAG}-kernel-${KERNEL_VER}-${SHORT_SHA}"
+        
+        echo "🏷️ 版本标签: $RELEASE_TAG"
         echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
-        echo "版本标签: $RELEASE_TAG"
-
+        
+        # 也生成一个友好的显示名称
+        DISPLAY_NAME="Debian for Raphael - $(date -u '+%Y-%m-%d')"
+        echo "display_name=$DISPLAY_NAME" >> $GITHUB_OUTPUT
+    
     - name: "🚀 创建 GitHub Release"
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.generate_tag.outputs.release_tag }}
-        name: "Debian for Raphael - ${{ steps.generate_tag.outputs.release_tag }}"
+        name: ${{ steps.generate_tag.outputs.display_name }}
         body: |
-          # 🐧 Debian 镜像
+          # 🐧 Debian for Xiaomi Raphael (K20 Pro)
           
           ## 📋 构建信息
-          - **内核版本**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
-          - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-          - **包含变体**: ${{ github.event.inputs.test_mode == 'true' && 'Debian Server (测试模式)' || 'Debian Server/Desktop' }}
+          - **内核版本**: ${{ needs.setup.outputs.kernel_version }}
           - **构建时间**: ${{ github.event.created_at }}
+          - **提交**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
+          - **工作流**: [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
           - **总大小**: ${{ steps.prepare_release.outputs.total_size_mb }} MB
           
-          ${{ github.event.inputs.test_mode == 'true' && '> ⚠️ 测试模式：仅构建了Debian Server变体' || '' }}
+          ${{ github.event.inputs.test_mode == 'true' && '> ⚠️ **测试模式**：仅构建了Debian Server变体' || '' }}
           
           ## ⚠️ 重要提示
           ### 默认凭据
           - **用户名**: `root`
-          - **密码**: `1234` (首次登录后请立即修改！)
-          - **普通用户**: `user`
-          - **用户密码**: `user`
+          - **密码**: `1234`
           
           ### 安全建议
-          1. 首次登录后立即修改默认密码
-          2. 禁用root远程登录（可选）
-          3. 配置防火墙规则
-
+          1. 首次登录后请立即修改默认密码
+          2. 建议创建普通用户并禁用root远程登录
+          3. 更新系统并安装安全更新
+          
           ## 📦 镜像文件
           ${{ steps.prepare_release.outputs.filelist_text }}
+          
+          ## 🔐 验证文件完整性
+          使用以下命令验证文件完整性：
+          ```bash
+          sha256sum -c SHA256SUMS
+          ```
+          
+          ## ❓ 使用帮助
+          有关刷机和使用说明，请参考项目文档。
+          
+          ---
+          
+          *构建于 GitHub Actions • ${{ runner.os }}-${{ runner.arch }}*
 
         draft: false
         prerelease: false
         files: |
-          release-assets/*.7z
-          release-assets/xiaomi-k20pro-boot.img
+          release/*
         generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: "📊 发布完成摘要"
+    
+    - name: "📢 发布成功通知"
       run: |
         echo "========================================"
-        echo "✅ Release 创建成功！"
+        echo "🎉 Release 创建成功！"
         echo "----------------------------------------"
         echo "标签: ${{ steps.generate_tag.outputs.release_tag }}"
-        echo "文件: ${{ steps.prepare_release.outputs.file_count }} 个镜像"
+        echo "文件: ${{ steps.prepare_release.outputs.file_count }} 个文件"
         echo "大小: ${{ steps.prepare_release.outputs.total_size_mb }} MB"
-        echo "链接: https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_tag.outputs.release_tag }}"
+        echo "Release链接:"
+        echo "  https://github.com/${{ github.repository }}/releases/tag/${{ steps.generate_tag.outputs.release_tag }}"
         echo "========================================"
