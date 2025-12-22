@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: false
+      use_china_mirror:
+        description: '使用中国源 (默认勾选)'
+        required: false
+        type: boolean
+        default: true
 
 # 全局环境变量
 env:

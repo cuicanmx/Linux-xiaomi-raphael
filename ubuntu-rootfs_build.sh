@@ -1,5 +1,14 @@
 set -e
 
+# 颜色定义
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
 # 配置变量
 IMAGE_SIZE="6G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
@@ -9,30 +18,30 @@ SCRIPT_ARG_COUNT=$#
 
 # 检查参数
 if [ $SCRIPT_ARG_COUNT -lt 2 ]; then
-    echo "错误: 参数数量不足，期望 2 个参数"
-    echo "用法: $0 <发行版类型-变体> <内核版本>"
-    echo "示例: $0 ubuntu-server 6.18"
+    echo -e "${RED}错误: 参数数量不足，期望 2 个参数${NC}"
+    echo -e "${YELLOW}用法: $0 <发行版类型-变体> <内核版本>${NC}"
+    echo -e "${YELLOW}示例: $0 ubuntu-server 6.18${NC}"
     exit 1
 fi
 
 # 检查root权限
 if [ "$(id -u)" -ne 0 ]; then
-    echo "错误: 需要root权限运行此脚本"
+    echo -e "${RED}错误: 需要root权限运行此脚本${NC}"
     exit 1
 fi
 
 # 确保使用bash运行脚本
 if [ -z "$BASH_VERSION" ]; then
-    echo "❌ 错误: 请使用bash运行此脚本"
+    echo -e "${RED}❌ 错误: 请使用bash运行此脚本${NC}"
     exit 1
 fi
 
-echo ""
+echo -e "${BLUE}"
 echo "=========================================="
 echo "开始构建 $1 发行版，内核版本 $2"
 echo "=========================================="
-echo ""
-echo "参数检查: distro=$1, kernel=$2"
+echo -e "${NC}"
+echo -e "${CYAN}参数检查: distro=$1, kernel=$2${NC}"
 
 # 解析发行版信息
 distro_type=$(echo "$1" | cut -d'-' -f1)
@@ -46,14 +55,14 @@ else
     exit 1
 fi
 
-echo "解析发行版信息:"
-echo "  类型: $distro_type"
-echo "  变体: $distro_variant"
-echo "  版本: $distro_version (默认)"
-echo "  内核: $2"
+echo -e "${CYAN}解析发行版信息:${NC}"
+echo -e "  ${GREEN}类型:${NC} $distro_type"
+echo -e "  ${GREEN}变体:${NC} $distro_variant"
+echo -e "  ${GREEN}版本:${NC} $distro_version (默认)"
+echo -e "  ${GREEN}内核:${NC} $2"
 
 # 检查必需的内核包
-echo "检查内核包文件..."
+echo -e "${CYAN}检查内核包文件...${NC}"
 # 使用兼容的shell语法检查包文件
 found_packages=0
 missing_packages=""
@@ -61,23 +70,23 @@ missing_packages=""
 # 检查每个包文件（使用通配符匹配）
 for pkg in linux-xiaomi-raphael firmware-xiaomi-raphael alsa-xiaomi-raphael; do
     if ls ${pkg}*.deb 1> /dev/null 2>&1; then
-        echo "找到: ${pkg}*.deb"
+        echo -e "  ${GREEN}找到:${NC} ${pkg}*.deb"
         found_packages=$((found_packages + 1))
     else
         missing_packages="${pkg}*.deb $missing_packages"
-        echo "未找到: ${pkg}*.deb"
+        echo -e "  ${RED}未找到:${NC} ${pkg}*.deb"
     fi
 done
 
 if [ $found_packages -lt 3 ]; then
-    echo "错误: 缺少必需的内核包: $missing_packages"
-    echo "请确保在工作流中正确下载了内核包"
-    echo "当前目录文件列表:"
-    ls -la *.deb 2>/dev/null || echo "  没有找到 .deb 文件"
+    echo -e "${RED}错误: 缺少必需的内核包: $missing_packages${NC}"
+    echo -e "${YELLOW}请确保在工作流中正确下载了内核包${NC}"
+    echo -e "${YELLOW}当前目录文件列表:${NC}"
+    ls -la *.deb 2>/dev/null || echo -e "  ${RED}没有找到 .deb 文件${NC}"
     exit 1
 fi
 
-echo "所有必需的内核包已就绪 ($found_packages/3)"
+echo -e "${GREEN}所有必需的内核包已就绪 ($found_packages/3)${NC}"
 
 # 清理旧的rootfs和镜像文件
 echo "清理旧的rootfs和镜像文件..."
@@ -155,7 +164,7 @@ base_packages=(
     # SSH依赖
     openssh-server openssh-client chrony ubuntu-server
     # 基础工具
-    sudo vim wget curl iputils-ping
+    vim wget curl iputils-ping
     # WiFi配置工具
     network-manager wireless-regdb 
     # 音频/硬件兼容
