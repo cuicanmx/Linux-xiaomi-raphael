@@ -165,7 +165,7 @@ EOF
     chroot rootdir systemctl disable networking.service 2>/dev/null || true
     
     # 启用systemd-networkd
-    chroot rootdir systemctl enable systemd-networkd systemd-resolved
+    chroot rootdir systemctl enable systemd-networkd
 }
 
 configure_ssh() {
