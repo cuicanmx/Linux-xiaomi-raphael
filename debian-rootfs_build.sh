@@ -1,5 +1,8 @@
 set -e
 
+# 配置终端类型，避免xterm-256color错误
+export TERM=xterm
+
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -166,7 +169,7 @@ echo_success "虚拟文件系统挂载完成"
 
 # Update package list
 echo_info "🔄 更新软件包列表..."
-if chroot rootdir env TERM=xterm apt update; then
+if chroot rootdir apt update; then
     echo_success "✅ 软件包列表更新完成"
 else
     echo_error "❌ 软件包列表更新失败"
@@ -191,7 +194,7 @@ base_packages=(
 )
 
 echo_info "执行命令: chroot rootdir apt install -y --no-install-recommends ${base_packages[*]}"
-if chroot rootdir env TERM=xterm apt install -y --no-install-recommends "${base_packages[@]}"; then
+if chroot rootdir apt install -y --no-install-recommends "${base_packages[@]}"; then
     echo_success "✅ 核心基础包安装完成"
 else
     echo_error "❌ 核心基础包安装失败"
@@ -346,7 +349,7 @@ if [ "$distro_variant" = "desktop" ]; then
     
     if [ "$distro_type" = "debian" ]; then
         echo_info "🎨 安装GNOME桌面环境..."
-        if chroot rootdir env TERM=xterm apt install -qq -y task-gnome-desktop; then
+        if chroot rootdir apt install -qq -y task-gnome-desktop; then
             echo_success "✅ GNOME桌面环境安装完成 (Debian)"
             mkdir -p rootdir/var/lib/gdm
             touch rootdir/var/lib/gdm/run-initial-setup
@@ -435,7 +438,7 @@ EOF
     
     # 更新源列表
     echo_info "🔄 更新软件包列表..."
-    if chroot rootdir env TERM=xterm apt update ; then
+    if chroot rootdir apt update; then
         echo_success "✅ 软件包列表更新完成"
     else
         echo_warning "⚠️  软件包列表更新失败，可能是网络问题"
@@ -444,7 +447,7 @@ fi
 
 # 清理
 echo "🧹 清理系统..."
-chroot rootdir env TERM=xterm apt clean all
+chroot rootdir apt clean all
 
 echo "✅ 系统清理完成"
 
