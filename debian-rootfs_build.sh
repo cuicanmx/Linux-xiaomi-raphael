@@ -300,7 +300,7 @@ EOF
 chroot rootdir systemctl disable networking.service 2>/dev/null || true
 
 # 5. 启用systemd-networkd
-chroot rootdir systemctl enable --now systemd-networkd systemd-resolved
+chroot rootdir systemctl enable systemd-networkd systemd-resolved
 
 echo_success "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
 # ==============================================================================
