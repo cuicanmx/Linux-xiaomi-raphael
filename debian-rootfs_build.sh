@@ -26,19 +26,18 @@ readonly KERNEL_PACKAGES=(
 # ======================== 函数定义 ========================
 
 log_info() {
-    echo "[INFO] $(date +'%Y-%m-%d %H:%M:%S') $1"
+    echo "$1"
 }
 
 log_error() {
-    echo "[ERROR] $(date +'%Y-%m-%d %H:%M:%S') $1" >&2
+    echo "$1" >&2
     exit 1
 }
 
 check_dependencies() {
-    log_info "检查系统依赖..."
     local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs)
     for dep in "${deps[@]}"; do
-        command -v "$dep" &>/dev/null || log_error "必需的命令 '$dep' 未找到"
+        command -v "$dep" &>/dev/null || log_error "❌ 必需的命令 '$dep' 未找到"
     done
 }
 
@@ -74,10 +73,9 @@ parse_arguments() {
 }
 
 check_kernel_packages() {
-    log_info "检查内核包..."
     for pkg in "${KERNEL_PACKAGES[@]}"; do
         if ! compgen -G "${pkg}*.deb" > /dev/null; then
-            log_error "缺少内核包: ${pkg}*.deb"
+            log_error "❌ 缺少内核包: ${pkg}*.deb"
         fi
     done
 }
@@ -95,7 +93,7 @@ cleanup_environment() {
 }
 
 create_and_mount_image() {
-    log_info "创建IMG镜像文件..."
+    log_info "📁 创建IMG镜像文件..."
     truncate -s "$IMAGE_SIZE" rootfs.img
     mkfs.ext4 rootfs.img
     mkdir -p rootdir
@@ -103,9 +101,9 @@ create_and_mount_image() {
 }
 
 bootstrap_system() {
-    log_info "引导系统: $DISTRO_TYPE $DISTRO_VERSION"
+    log_info "🌱 引导系统: $DISTRO_TYPE $DISTRO_VERSION"
     debootstrap --arch=arm64 "$DISTRO_VERSION" rootdir "$MIRROR" || \
-        log_error "debootstrap失败"
+        log_error "❌ debootstrap 失败"
 }
 
 mount_virtual_fs() {
@@ -117,16 +115,13 @@ mount_virtual_fs() {
 }
 
 configure_system() {
-    log_info "配置系统..."
+    log_info "⚙️ 配置系统..."
     
-    # 设置环境变量
     echo 'LC_ALL=C.UTF-8' > rootdir/etc/environment
     echo 'LANG=C.UTF-8' >> rootdir/etc/environment
     
-    # 设置root密码
-    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd || log_error "设置密码失败"
+    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd || log_error "❌ 设置密码失败"
     
-    # 设置主机名
     echo "$HOSTNAME" > rootdir/etc/hostname
     echo -e "127.0.0.1\tlocalhost\n127.0.1.1\t$HOSTNAME" > rootdir/etc/hosts
     
@@ -134,7 +129,7 @@ configure_system() {
 }
 
 configure_network() {
-    log_info "配置网络..."
+    log_info "🌐 配置网络..."
     
     mkdir -p rootdir/etc/systemd/network/
     cat > rootdir/etc/systemd/network/10-autodhcp.network << 'EOF'
@@ -153,25 +148,20 @@ UseDNS=true
 UseHostname=false
 EOF
     
-    # 禁用传统network服务
     chroot rootdir systemctl disable networking.service 2>/dev/null || true
     
-    # 启用systemd-networkd
     chroot rootdir systemctl enable systemd-networkd
 }
 
 configure_ssh() {
     [[ "$DISTRO_VARIANT" == *"desktop"* ]] && {
-        log_info "桌面环境，跳过SSH配置"
         return 0
     }
     
-    log_info "配置SSH..."
+    log_info "🖥️ 配置SSH..."
     
-    # 备份原配置
     chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
     
-    # 写入新配置
     cat > rootdir/etc/ssh/sshd_config << 'EOF'
 ListenAddress 0.0.0.0
 PermitRootLogin yes
@@ -179,14 +169,13 @@ PubkeyAuthentication yes
 PasswordAuthentication yes
 EOF
     
-    # 启用SSH服务
     chroot rootdir systemctl enable ssh
 }
 
 configure_china_mirror() {
     [[ "$USE_CHINA_MIRROR" != "true" ]] && return 0
     
-    log_info "配置中国源..."
+    log_info "🇨🇳 配置中国源..."
     
     if [[ -f rootdir/etc/apt/sources.list ]]; then
         cp rootdir/etc/apt/sources.list rootdir/etc/apt/sources.list.bak
@@ -201,29 +190,26 @@ EOF
 }
 
 install_packages() {
-    log_info "更新包列表..."
-    chroot rootdir apt update || log_error "更新包列表失败"
+    log_info "🔄 更新软件包列表..."
+    chroot rootdir apt update || log_error "❌ 更新包列表失败"
     
-    log_info "安装基础包..."
+    log_info "📦 安装基础包..."
     chroot rootdir apt install -y --no-install-recommends "${BASE_PACKAGES[@]}" || \
-        log_error "安装基础包失败"
+        log_error "❌ 安装基础包失败"
     
-    # 配置时间同步
     chroot rootdir systemctl enable chrony
     chroot rootdir systemctl start chrony
 }
 
 install_kernel() {
-    log_info "安装内核包..."
+    log_info "🔧 安装内核包..."
     
-    # 复制内核包
     log_info "📦 复制内核包到 chroot 环境..."
     cp linux-xiaomi-raphael*.deb rootdir/tmp/
     cp firmware-xiaomi-raphael*.deb rootdir/tmp/
     cp alsa-xiaomi-raphael*.deb rootdir/tmp/
     log_info "✅ 内核包复制完成"
     
-    # 安装内核包
     log_info "🔧 安装定制内核包..."
     if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb; then
         log_info "✅ linux-xiaomi-raphael 安装完成"
@@ -246,15 +232,14 @@ install_kernel() {
         exit 1
     fi
     
-    # 更新initramfs
     chroot rootdir update-initramfs -c -k all
 }
 
 install_desktop() {
     [[ "$DISTRO_VARIANT" != "desktop" ]] && return 0
     
-    log_info "安装桌面环境..."
-    chroot rootdir apt install -y task-gnome-desktop || log_error "安装桌面失败"
+    log_info "🖥️ 安装桌面环境..."
+    chroot rootdir apt install -y task-gnome-desktop || log_error "❌ 安装桌面失败"
     
     mkdir -p rootdir/var/lib/gdm
     touch rootdir/var/lib/gdm/run-initial-setup
@@ -263,26 +248,22 @@ install_desktop() {
 }
 
 generate_boot_image() {
-    [[ "$DISTRO_TYPE" != "debian" ]] && return 0
     [[ "$DISTRO_VARIANT" != "server" ]] && return 0
     
-    log_info "生成boot镜像..."
+    log_info "🖼️ 生成boot镜像..."
     local boot_img="xiaomi-k20pro-boot.img"
     
-    # 下载boot镜像
     wget -q --timeout=30 \
          https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img || {
-        log_info "boot镜像下载失败，跳过"
+        log_info "⚠️ boot镜像下载失败，跳过"
         return 0
     }
     
-    # 检查必要文件
     [[ ! -d "rootdir/boot" ]] && {
-        log_info "boot目录不存在，跳过"
+        log_info "⚠️ boot目录不存在，跳过"
         return 0
     }
     
-    # 挂载并复制文件
     mkdir -p boot_tmp
     if mount -o loop "$boot_img" boot_tmp 2>/dev/null; then
         [[ -d "rootdir/boot/dtbs/qcom" ]] && {
@@ -301,9 +282,9 @@ generate_boot_image() {
         
         umount boot_tmp 2>/dev/null || true
         rm -rf boot_tmp
-        log_info "boot镜像生成完成"
+        log_info "✅ boot镜像生成完成"
     else
-        log_info "boot镜像挂载失败，跳过"
+        log_info "⚠️ boot镜像挂载失败，跳过"
     fi
 }
 
@@ -334,33 +315,31 @@ cleanup_and_package() {
 main() {
     local start_time=$(date +%s)
     
-    # 基础检查
     validate_arguments "$@"
     parse_arguments "$@"
     check_dependencies
     check_kernel_packages
     cleanup_environment
     
-    # 创建和挂载镜像
     create_and_mount_image
     bootstrap_system
     mount_virtual_fs
     
-    # 系统配置
     install_kernel
     install_packages
     configure_system
     configure_network
     configure_ssh
     configure_china_mirror
-    # 生成boot镜像
+    
+    install_desktop
+    
     generate_boot_image
     
-    # 清理和打包
     cleanup_and_package
     
     local end_time=$(date +%s)
-    log_info "总用时: $((end_time - start_time))秒"
+    log_info "⏱️ 总用时: $((end_time - start_time))秒"
 }
 
 main "$@"
