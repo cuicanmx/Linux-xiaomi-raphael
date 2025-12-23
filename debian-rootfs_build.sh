@@ -127,8 +127,9 @@ configure_system() {
     echo "$HOSTNAME" > rootdir/etc/hostname
     echo -e "127.0.0.1\tlocalhost\n127.0.1.1\t$HOSTNAME" > rootdir/etc/hosts
     
-    echo -e "PARTLABEL=userdata\t/\text4\terrors=remount-ro,x-systemd.growfs\t0\t1" > rootdir/etc/fstab
-    echo -e "PARTLABEL=cache\t/boot\tvfat\tumask=0077\t0\t0" >> rootdir/etc/fstab
+    echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
+    PARTLABEL=cache /boot vfat umask=0077 0 1" | tee rootdir/etc/fstab
+
 }
 
 # 配置网络
