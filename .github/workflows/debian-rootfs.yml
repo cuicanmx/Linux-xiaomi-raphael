@@ -90,10 +90,10 @@ jobs:
         KERNEL_VER="${{ needs.setup.outputs.kernel_version }}"
         RELEASE_TAG="kernel-$KERNEL_VER"
         
-        echo "从Release [$RELEASE_TAG] 下载内核包..."
+        echo "📦 从Release [$RELEASE_TAG] 下载内核包..."
         
         if ! gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-          echo "错误：找不到Release [$RELEASE_TAG]"
+          echo "❌ 错误：找不到Release [$RELEASE_TAG]"
           exit 1
         fi
         
@@ -104,9 +104,11 @@ jobs:
         
         DEB_COUNT=$(ls -1 *.deb 2>/dev/null | wc -l)
         if [ "$DEB_COUNT" -eq 0 ]; then
-          echo "错误：未下载到任何内核包！"
+          echo "❌ 错误：未下载到任何内核包！"
           exit 1
         fi
+        
+        echo "✅ 已下载 $DEB_COUNT 个内核包"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
@@ -140,15 +142,15 @@ jobs:
         sudo "./$BUILD_SCRIPT" "${BUILD_ARGS[@]}"
         
         # 查找生成的镜像文件
-        OUTPUT_PATTERN="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"
-        OUTPUT_FILE=""
+        OUTPUT_PATTERN="${DISTRO}-kernel-${KERNEL_VER}.7z"
         
-        for pattern in "$OUTPUT_PATTERN" "raphael-*-kernel-$KERNEL_VER.7z" "*.7z"; do
-          if ls $pattern 2>/dev/null | grep -q .; then
-            OUTPUT_FILE=$(ls $pattern | head -1)
-            break
-          fi
-        done
+        if [ -f "$OUTPUT_PATTERN" ]; then
+          OUTPUT_FILE="$OUTPUT_PATTERN"
+        else
+          echo "❌ 错误：未找到构建产物 $OUTPUT_PATTERN"
+          ls -la *.7z 2>/dev/null || true
+          exit 1
+        fi
         
         if [ -f "$OUTPUT_FILE" ]; then
           FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
@@ -157,10 +159,11 @@ jobs:
           NEW_FILENAME="${DISTRO}-kernel-${KERNEL_VER}-${BUILD_ID}-${TIMESTAMP}.7z"
           mv "$OUTPUT_FILE" "$NEW_FILENAME"
           
+          echo "✅ 构建产物: $NEW_FILENAME ($FILE_SIZE)"
           echo "final_filename=$NEW_FILENAME" >> $GITHUB_OUTPUT
           echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
         else
-          echo "错误：未找到构建产物！"
+          echo "❌ 错误：处理构建产物时出错！"
           exit 1
         fi
     
