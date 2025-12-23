@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ======================== 配置部分 ========================
+# 配置部分
 readonly IMAGE_SIZE="6G"
 readonly FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 readonly ROOT_PASSWORD="1234"
@@ -23,33 +23,25 @@ readonly KERNEL_PACKAGES=(
     alsa-xiaomi-raphael
 )
 
-# ======================== 函数定义 ========================
-
-log_info() {
-    echo "$1"
-}
-
-log_error() {
-    echo "$1" >&2
-    exit 1
-}
-
+# 检查依赖
 check_dependencies() {
     local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs zstd)
     for dep in "${deps[@]}"; do
-        command -v "$dep" &>/dev/null || log_error "❌ 必需的命令 '$dep' 未找到"
+        command -v "$dep" &>/dev/null || { echo "必需的命令 '$dep' 未找到" >&2; exit 1; }
     done
 }
 
+# 验证参数
 validate_arguments() {
     [[ $# -ge 2 ]] || {
         echo "用法: $0 <变体> <内核版本> [--china-mirror]"
         echo "示例: $0 server 6.18 --china-mirror"
         exit 1
     }
-    [[ $(id -u) -eq 0 ]] || log_error "❌ 需要root权限"
+    [[ $(id -u) -eq 0 ]] || { echo "需要root权限" >&2; exit 1; }
 }
 
+# 解析参数
 parse_arguments() {
     local distro_arg=$1 kernel_version=$2 use_china_mirror="false"
     
@@ -57,7 +49,7 @@ parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --china-mirror) use_china_mirror="true" ;;
-            *) log_error "❌ 未知参数: $1" ;;
+            *) echo "未知参数: $1" >&2; exit 1 ;;
         esac
         shift
     done
@@ -69,7 +61,7 @@ parse_arguments() {
             distro_version="trixie"
             mirror="http://deb.debian.org/debian/"
             ;;
-        *) log_error "不支持的发行版类型: $distro_type，仅支持 debian" ;;
+        *) echo "不支持的发行版类型: $distro_type，仅支持 debian" >&2; exit 1 ;;
     esac
     
     export DISTRO_TYPE="$distro_type"
@@ -78,22 +70,22 @@ parse_arguments() {
     export KERNEL_VERSION="$kernel_version"
     export USE_CHINA_MIRROR="$use_china_mirror"
     export MIRROR="$mirror"
-    
-    log_info "参数解析完成: $distro_type-$distro_variant, 内核: $kernel_version"
 }
 
+# 检查内核包
 check_kernel_packages() {
     for pkg in "${KERNEL_PACKAGES[@]}"; do
         if ! compgen -G "${pkg}*.deb" > /dev/null; then
-            log_error "❌ 缺少内核包: ${pkg}*.deb"
+            echo "缺少内核包: ${pkg}*.deb" >&2
+            exit 1
         fi
     done
 }
 
+# 清理环境
 cleanup_environment() {
-    log_info "清理环境..."
+    echo "清理环境..."
     
-    # 卸载并清理rootdir
     if [[ -d "rootdir" ]]; then
         mount | grep "rootdir" | awk '{print $3}' | xargs -r umount -l 2>/dev/null || true
         rm -rf rootdir
@@ -102,32 +94,35 @@ cleanup_environment() {
     rm -f rootfs.img 2>/dev/null || true
 }
 
+# 创建并挂载镜像
 create_and_mount_image() {
-    log_info "📁 创建IMG镜像文件..."
+    echo "创建IMG镜像文件..."
     truncate -s "$IMAGE_SIZE" rootfs.img
     mkfs.ext4 rootfs.img
     mkdir -p rootdir
     mount -o loop rootfs.img rootdir
 }
 
+# 引导系统
 bootstrap_system() {
-    log_info "🌱 引导系统: $DISTRO_TYPE $DISTRO_VERSION"
-    debootstrap --arch=arm64 "$DISTRO_VERSION" rootdir "$MIRROR" || \
-        log_error "❌ debootstrap 失败"
+    echo "引导系统: $DISTRO_TYPE $DISTRO_VERSION"
+    debootstrap --arch=arm64 "$DISTRO_VERSION" rootdir "$MIRROR" || { echo "debootstrap 失败" >&2; exit 1; }
 }
 
+# 挂载虚拟文件系统
 mount_virtual_fs() {
-    log_info "🔌 挂载虚拟文件系统..."
+    echo "挂载虚拟文件系统..."
     mount --bind /dev rootdir/dev
     mount --bind /dev/pts rootdir/dev/pts
     mount -t proc proc rootdir/proc
     mount -t sysfs sys rootdir/sys
 }
 
+# 配置系统
 configure_system() {
-    log_info "⚙️ 配置系统..."
+    echo "配置系统..."
     
-    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd || log_error "❌ 设置密码失败"
+    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd || { echo "设置密码失败" >&2; exit 1; }
     
     echo "$HOSTNAME" > rootdir/etc/hostname
     echo -e "127.0.0.1\tlocalhost\n127.0.1.1\t$HOSTNAME" > rootdir/etc/hosts
@@ -136,8 +131,9 @@ configure_system() {
     PARTLABEL=cache /boot vfat umask=0077,nofail 0 1" | tee rootdir/etc/fstab
 }
 
+# 配置网络
 configure_network() {
-    log_info "🌐 配置网络..."
+    echo "配置网络..."
     
     mkdir -p rootdir/etc/systemd/network/
     cat > rootdir/etc/systemd/network/10-autodhcp.network << 'EOF'
@@ -157,16 +153,14 @@ UseHostname=false
 EOF
     
     chroot rootdir systemctl disable networking.service 2>/dev/null || true
-    
     chroot rootdir systemctl enable systemd-networkd
 }
 
+# 配置SSH
 configure_ssh() {
-    [[ "$DISTRO_VARIANT" == *"desktop"* ]] && {
-        return 0
-    }
+    [[ "$DISTRO_VARIANT" == *"desktop"* ]] && return 0
     
-    log_info "🖥️ 配置SSH..."
+    echo "配置SSH..."
     
     chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
     
@@ -180,10 +174,11 @@ EOF
     chroot rootdir systemctl enable ssh
 }
 
+# 配置中国源
 configure_china_mirror() {
     [[ "$USE_CHINA_MIRROR" != "true" ]] && return 0
     
-    log_info "🇨🇳 配置中国源..."
+    echo "配置中国源..."
     
     if [[ -f rootdir/etc/apt/sources.list ]]; then
         cp rootdir/etc/apt/sources.list rootdir/etc/apt/sources.list.bak
@@ -197,44 +192,46 @@ deb http://security.debian.org/debian-security/ trixie-security main contrib non
 EOF
 }
 
+# 安装包
 install_packages() {
-    log_info "🔄 更新软件包列表..."
-    chroot rootdir apt update || log_error "❌ 更新包列表失败"
+    echo "更新软件包列表..."
+    chroot rootdir apt update || { echo "更新包列表失败" >&2; exit 1; }
     
-    log_info "📦 安装基础包..."
-    chroot rootdir apt install -y "${BASE_PACKAGES[@]}" || \
-        log_error "❌ 安装基础包失败"
+    echo "安装基础包..."
+    chroot rootdir apt install -y "${BASE_PACKAGES[@]}" || { echo "安装基础包失败" >&2; exit 1; }
     
     chroot rootdir systemctl enable chrony
     chroot rootdir systemctl start chrony
 }
 
+# 安装内核
 install_kernel() {
-    log_info "🔧 安装内核包..."
+    echo "安装内核包..."
     
-    log_info "📦 复制内核包到 chroot 环境..."
+    echo "复制内核包到 chroot 环境..."
     for pkg in "${KERNEL_PACKAGES[@]}"; do
         cp "${pkg}"*.deb rootdir/tmp/
     done
-    log_info "✅ 内核包复制完成"
     
-    log_info "🔧 安装定制内核包..."
+    echo "安装定制内核包..."
     for pkg in "${KERNEL_PACKAGES[@]}"; do
         if chroot rootdir dpkg -i "/tmp/${pkg}.deb"; then
-            log_info "✅ $pkg 安装完成"
+            echo "$pkg 安装完成"
         else
-            log_error "❌ $pkg 安装失败"
+            echo "$pkg 安装失败" >&2
+            exit 1
         fi
     done
     
     chroot rootdir update-initramfs -c -k all
 }
 
+# 安装桌面
 install_desktop() {
     [[ "$DISTRO_VARIANT" != "desktop" ]] && return 0
     
-    log_info "🖥️ 安装桌面环境..."
-    chroot rootdir apt install -y task-gnome-desktop || log_error "❌ 安装桌面失败"
+    echo "安装桌面环境..."
+    chroot rootdir apt install -y task-gnome-desktop || { echo "安装桌面失败" >&2; exit 1; }
     
     mkdir -p rootdir/var/lib/gdm
     touch rootdir/var/lib/gdm/run-initial-setup
@@ -242,20 +239,21 @@ install_desktop() {
     chroot rootdir systemctl set-default graphical.target
 }
 
+# 生成boot镜像
 generate_boot_image() {
     [[ "$DISTRO_VARIANT" != "server" ]] && return 0
     
-    log_info "🖼️ 生成boot镜像..."
+    echo "生成boot镜像..."
     local boot_img="xiaomi-k20pro-boot.img"
     
     wget -q --timeout=30 \
          https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img || {
-        log_info "⚠️ boot镜像下载失败，跳过"
+        echo "boot镜像下载失败，跳过"
         return 0
     }
     
     [[ ! -d "rootdir/boot" ]] && {
-        log_info "⚠️ boot目录不存在，跳过"
+        echo "boot目录不存在，跳过"
         return 0
     }
     
@@ -277,36 +275,36 @@ generate_boot_image() {
         
         umount boot_tmp 2>/dev/null || true
         rm -rf boot_tmp
-        log_info "✅ boot镜像生成完成"
+        echo "boot镜像生成完成"
     else
-        log_info "⚠️ boot镜像挂载失败，跳过"
+        echo "boot镜像挂载失败，跳过"
     fi
 }
 
+# 清理和打包
 cleanup_and_package() {
-    log_info "🧹 清理系统..."
+    echo "清理系统..."
     chroot rootdir apt clean all
     
-    log_info "🔓 卸载文件系统..."
+    echo "卸载文件系统..."
     for mountpoint in sys proc dev/pts dev; do
         mountpoint -q "rootdir/$mountpoint" && umount -l "rootdir/$mountpoint" 2>/dev/null || true
     done
     mountpoint -q "rootdir" && umount "rootdir" 2>/dev/null || true
     rm -rf rootdir
     
-    log_info "🔧 调整文件系统UUID..."
+    echo "调整文件系统UUID..."
     tune2fs -U "$FILESYSTEM_UUID" rootfs.img 2>/dev/null || true
     
     local output_file="${DISTRO_TYPE}-${DISTRO_VARIANT}-kernel-${KERNEL_VERSION}.7z"
-    log_info "🗜️ 创建压缩包: $output_file"
+    echo "创建压缩包: $output_file"
     
-    7z a "${output_file}" rootfs.img || \
-        log_error "❌ 压缩包创建失败"
+    7z a "${output_file}" rootfs.img || { echo "压缩包创建失败" >&2; exit 1; }
     
-    echo "🎉 构建完成: $output_file"
+    echo "构建完成: $output_file"
 }
 
-# ======================== 主流程 ========================
+# 主流程
 main() {
     local start_time=$(date +%s)
     
@@ -335,7 +333,7 @@ main() {
     cleanup_and_package
     
     local end_time=$(date +%s)
-    log_info "⏱️ 总用时: $((end_time - start_time))秒"
+    echo "总用时: $((end_time - start_time))秒"
 }
 
 main "$@"
