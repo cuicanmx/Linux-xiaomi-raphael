@@ -43,11 +43,11 @@ check_dependencies() {
 
 validate_arguments() {
     [[ $# -ge 2 ]] || {
-        echo "用法: $0 <发行版类型-变体> <内核版本> [use_china_mirror]"
-        echo "示例: $0 debian-server 6.18 true"
+        echo "用法: $0 <变体> <内核版本> [use_china_mirror]"
+        echo "示例: $0 server 6.18 true"
         exit 1
     }
-    [[ $(id -u) -eq 0 ]] || log_error "需要root权限"
+    [[ $(id -u) -eq 0 ]] || log_error "❌ 需要root权限"
 }
 
 parse_arguments() {
@@ -107,7 +107,7 @@ bootstrap_system() {
 }
 
 mount_virtual_fs() {
-    log_info "挂载虚拟文件系统..."
+    log_info "🔌 挂载虚拟文件系统..."
     mount --bind /dev rootdir/dev
     mount --bind /dev/pts rootdir/dev/pts
     mount -t proc proc rootdir/proc
@@ -205,32 +205,19 @@ install_kernel() {
     log_info "🔧 安装内核包..."
     
     log_info "📦 复制内核包到 chroot 环境..."
-    cp linux-xiaomi-raphael*.deb rootdir/tmp/
-    cp firmware-xiaomi-raphael*.deb rootdir/tmp/
-    cp alsa-xiaomi-raphael*.deb rootdir/tmp/
+    for pkg in "${KERNEL_PACKAGES[@]}"; do
+        cp "${pkg}"*.deb rootdir/tmp/
+    done
     log_info "✅ 内核包复制完成"
     
     log_info "🔧 安装定制内核包..."
-    if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb; then
-        log_info "✅ linux-xiaomi-raphael 安装完成"
-    else
-        log_error "❌ linux-xiaomi-raphael 安装失败"
-        exit 1
-    fi
-
-    if chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb; then
-        log_info "✅ firmware-xiaomi-raphael 安装完成"
-    else
-        log_error "❌ firmware-xiaomi-raphael 安装失败"
-        exit 1
-    fi
-
-    if chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb; then
-        log_info "✅ alsa-xiaomi-raphael 安装完成"
-    else
-        log_error "❌ alsa-xiaomi-raphael 安装失败"
-        exit 1
-    fi
+    for pkg in "${KERNEL_PACKAGES[@]}"; do
+        if chroot rootdir dpkg -i "/tmp/${pkg}.deb"; then
+            log_info "✅ $pkg 安装完成"
+        else
+            log_error "❌ $pkg 安装失败"
+        fi
+    done
     
     chroot rootdir update-initramfs -c -k all
 }
@@ -289,26 +276,26 @@ generate_boot_image() {
 }
 
 cleanup_and_package() {
-    log_info "清理系统..."
+    log_info "🧹 清理系统..."
     chroot rootdir apt clean all
     
-    log_info "卸载文件系统..."
+    log_info "🔓 卸载文件系统..."
     for mountpoint in sys proc dev/pts dev; do
         mountpoint -q "rootdir/$mountpoint" && umount -l "rootdir/$mountpoint" 2>/dev/null || true
     done
     mountpoint -q "rootdir" && umount "rootdir" 2>/dev/null || true
     rm -rf rootdir
     
-    log_info "调整文件系统UUID..."
+    log_info "🔧 调整文件系统UUID..."
     tune2fs -U "$FILESYSTEM_UUID" rootfs.img 2>/dev/null || true
     
-    local output_file="raphael-${DISTRO_TYPE}-${DISTRO_VARIANT}-kernel-${KERNEL_VERSION}.7z"
-    log_info "创建压缩包: $output_file"
+    local output_file="${DISTRO_TYPE}-${DISTRO_VARIANT}-kernel-${KERNEL_VERSION}.7z"
+    log_info "🗜️ 创建压缩包: $output_file"
     
-    7z a -t7z -m0=lzma2 -mx=9 -mfb=64 -md=32m -ms=on "${output_file}" rootfs.img || \
-        log_error "压缩包创建失败"
+    7z a "${output_file}" rootfs.img || \
+        log_error "❌ 压缩包创建失败"
     
-    echo "[SUCCESS] $(date +'%Y-%m-%d %H:%M:%S') 构建完成: $output_file"
+    echo "🎉 构建完成: $output_file"
 }
 
 # ======================== 主流程 ========================
