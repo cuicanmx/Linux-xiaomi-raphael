@@ -30,22 +30,10 @@ BASE_PACKAGES="systemd udev dbus bash-completion net-tools systemd-resolved wpas
 
 KERNEL_PACKAGES="linux-xiaomi-raphael firmware-xiaomi-raphael alsa-xiaomi-raphael"
 
-# 检查依赖命令
-for cmd in debootstrap mkfs.ext4 mount truncate 7z tune2fs; do
-    command -v "$cmd" &>/dev/null || { echo "命令 '$cmd' 未找到" >&2; exit 1; }
-done
-
 # 检查内核包
 for pkg in $KERNEL_PACKAGES; do
     [[ -f "${pkg}"*.deb ]] || { echo "缺少内核包: ${pkg}*.deb" >&2; exit 1; }
 done
-
-# 清理旧环境
-[[ -d "rootdir" ]] && {
-    mount | grep "rootdir" | awk '{print $3}' | xargs -r umount -l 2>/dev/null || true
-    rm -rf rootdir
-}
-rm -f rootfs.img 2>/dev/null || true
 
 echo "开始构建 $DISTRO_TYPE-$DISTRO_VARIANT..."
 
