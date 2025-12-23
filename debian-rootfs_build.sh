@@ -322,14 +322,15 @@ main() {
     bootstrap_system
     mount_virtual_fs
     
-    install_kernel
     install_packages
+    install_kernel
     configure_system
     configure_network
     configure_ssh
-    configure_china_mirror
-    
+
     install_desktop
+
+    configure_china_mirror
     
     generate_boot_image
     
