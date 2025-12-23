@@ -9,12 +9,12 @@ readonly HOSTNAME="xiaomi-raphael"
 
 # 核心包列表
 readonly BASE_PACKAGES=(
-    systemd udev dbus sudo bash
-    systemd-resolved wpasupplicant iw iproute2
+    systemd udev dbus bash-completion net-tools
+    systemd-resolved wpasupplicant iw iproute2 sudo
     openssh-server openssh-client chrony
     vim wget curl iputils-ping
-    network-manager wireless-regdb
-    alsa-ucm-conf alsa-utils initramfs-tools ca-certificates
+    network-manager wireless-regdb 
+    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools ca-certificates
 )
 
 readonly KERNEL_PACKAGES=(
@@ -60,11 +60,7 @@ parse_arguments() {
             distro_version="trixie"
             mirror="http://deb.debian.org/debian/"
             ;;
-        ubuntu)
-            distro_version="jammy"
-            mirror="http://ports.ubuntu.com/ubuntu-ports/"
-            ;;
-        *) log_error "不支持的发行版类型: $distro_type" ;;
+        *) log_error "不支持的发行版类型: $distro_type，仅支持 debian" ;;
     esac
     
     export DISTRO_TYPE="$distro_type"
@@ -134,11 +130,7 @@ configure_system() {
     echo "$HOSTNAME" > rootdir/etc/hostname
     echo -e "127.0.0.1\tlocalhost\n127.0.1.1\t$HOSTNAME" > rootdir/etc/hosts
     
-    # 配置fstab
-    cat > rootdir/etc/fstab << 'EOF'
-PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
-PARTLABEL=cache /boot vfat umask=0077,nofail 0 1
-EOF
+    echo -e "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1\nPARTLABEL=cache /boot vfat umask=0077,nofail 0 1" | tee rootdir/etc/fstab
 }
 
 configure_network() {
@@ -196,30 +188,16 @@ configure_china_mirror() {
     
     log_info "配置中国源..."
     
-    # 备份原始源列表
     if [[ -f rootdir/etc/apt/sources.list ]]; then
         cp rootdir/etc/apt/sources.list rootdir/etc/apt/sources.list.bak
     fi
     
-    # 写入新的源列表
-    case "$DISTRO_TYPE" in
-        debian)
-            cat > rootdir/etc/apt/sources.list << 'EOF'
+    cat > rootdir/etc/apt/sources.list << 'EOF'
 deb http://mirrors.ustc.edu.cn/debian/ trixie main contrib non-free non-free-firmware
 deb http://mirrors.ustc.edu.cn/debian/ trixie-updates main contrib non-free non-free-firmware
 deb http://mirrors.ustc.edu.cn/debian/ trixie-backports main contrib non-free non-free-firmware
 deb http://security.debian.org/debian-security/ trixie-security main contrib non-free non-free-firmware
 EOF
-            ;;
-        ubuntu)
-            cat > rootdir/etc/apt/sources.list << 'EOF'
-deb http://mirrors.ustc.edu.cn/ubuntu-ports/ jammy main restricted universe multiverse
-deb http://mirrors.ustc.edu.cn/ubuntu-ports/ jammy-updates main restricted universe multiverse
-deb http://mirrors.ustc.edu.cn/ubuntu-ports/ jammy-backports main restricted universe multiverse
-deb http://mirrors.ustc.edu.cn/ubuntu-ports/ jammy-security main restricted universe multiverse
-EOF
-            ;;
-    esac
 }
 
 install_packages() {
@@ -239,14 +217,34 @@ install_kernel() {
     log_info "安装内核包..."
     
     # 复制内核包
-    for pkg in "${KERNEL_PACKAGES[@]}"; do
-        cp "${pkg}"*.deb rootdir/tmp/
-    done
+    log_info "📦 复制内核包到 chroot 环境..."
+    cp linux-xiaomi-raphael*.deb rootdir/tmp/
+    cp firmware-xiaomi-raphael*.deb rootdir/tmp/
+    cp alsa-xiaomi-raphael*.deb rootdir/tmp/
+    log_info "✅ 内核包复制完成"
     
     # 安装内核包
-    for pkg in "${KERNEL_PACKAGES[@]}"; do
-        chroot rootdir dpkg -i "/tmp/${pkg}"*.deb || log_error "安装 $pkg 失败"
-    done
+    log_info "🔧 安装定制内核包..."
+    if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb; then
+        log_info "✅ linux-xiaomi-raphael 安装完成"
+    else
+        log_error "❌ linux-xiaomi-raphael 安装失败"
+        exit 1
+    fi
+
+    if chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb; then
+        log_info "✅ firmware-xiaomi-raphael 安装完成"
+    else
+        log_error "❌ firmware-xiaomi-raphael 安装失败"
+        exit 1
+    fi
+
+    if chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb; then
+        log_info "✅ alsa-xiaomi-raphael 安装完成"
+    else
+        log_error "❌ alsa-xiaomi-raphael 安装失败"
+        exit 1
+    fi
     
     # 更新initramfs
     chroot rootdir update-initramfs -c -k all
@@ -254,16 +252,13 @@ install_kernel() {
 
 install_desktop() {
     [[ "$DISTRO_VARIANT" != "desktop" ]] && return 0
-    [[ "$DISTRO_TYPE" != "debian" ]] && return 0
     
     log_info "安装桌面环境..."
     chroot rootdir apt install -y task-gnome-desktop || log_error "安装桌面失败"
     
-    # 配置GDM
     mkdir -p rootdir/var/lib/gdm
     touch rootdir/var/lib/gdm/run-initial-setup
     
-    # 设置图形界面启动
     chroot rootdir systemctl set-default graphical.target
 }
 
