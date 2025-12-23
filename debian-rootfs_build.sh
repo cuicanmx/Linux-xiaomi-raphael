@@ -323,7 +323,6 @@ main() {
     mount_virtual_fs
     
     install_packages
-    install_kernel
     configure_system
     configure_network
     configure_ssh
@@ -331,6 +330,7 @@ main() {
     install_desktop
 
     configure_china_mirror
+    install_kernel
     
     generate_boot_image
     
