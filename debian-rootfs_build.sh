@@ -352,15 +352,17 @@ main() {
     mount_virtual_fs
     
     # 系统配置
+    install_kernel
+    install_packages
     configure_system
     configure_network
     configure_ssh
     configure_china_mirror
     
     # 安装软件
-    install_packages
-    install_kernel
-    install_desktop
+    
+   
+   # install_desktop
     
     # 生成boot镜像
     generate_boot_image
