@@ -127,9 +127,6 @@ mount_virtual_fs() {
 configure_system() {
     log_info "⚙️ 配置系统..."
     
-    echo 'LC_ALL=C.UTF-8' > rootdir/etc/environment
-    echo 'LANG=C.UTF-8' >> rootdir/etc/environment
-    
     echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd || log_error "❌ 设置密码失败"
     
     echo "$HOSTNAME" > rootdir/etc/hostname
@@ -205,7 +202,7 @@ install_packages() {
     chroot rootdir apt update || log_error "❌ 更新包列表失败"
     
     log_info "📦 安装基础包..."
-    chroot rootdir apt install -y --no-install-recommends "${BASE_PACKAGES[@]}" || \
+    chroot rootdir apt install -y "${BASE_PACKAGES[@]}" || \
         log_error "❌ 安装基础包失败"
     
     chroot rootdir systemctl enable chrony
