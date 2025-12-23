@@ -35,7 +35,7 @@ log_error() {
 }
 
 check_dependencies() {
-    local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs)
+    local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs zstd)
     for dep in "${deps[@]}"; do
         command -v "$dep" &>/dev/null || log_error "❌ 必需的命令 '$dep' 未找到"
     done

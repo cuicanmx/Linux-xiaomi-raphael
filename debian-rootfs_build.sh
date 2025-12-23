@@ -12,7 +12,7 @@ readonly BASE_PACKAGES=(
     systemd udev dbus bash-completion net-tools
     systemd-resolved wpasupplicant iw iproute2 sudo
     openssh-server openssh-client chrony
-    vim wget curl iputils-ping
+    vim wget curl iputils-ping zstd
     network-manager wireless-regdb 
     alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools ca-certificates
 )
@@ -35,7 +35,7 @@ log_error() {
 }
 
 check_dependencies() {
-    local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs)
+    local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs zstd)
     for dep in "${deps[@]}"; do
         command -v "$dep" &>/dev/null || log_error "❌ 必需的命令 '$dep' 未找到"
     done
