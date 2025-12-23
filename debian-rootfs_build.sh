@@ -353,12 +353,6 @@ main() {
     configure_network
     configure_ssh
     configure_china_mirror
-    
-    # 安装软件
-    
-   
-   # install_desktop
-    
     # 生成boot镜像
     generate_boot_image
     
