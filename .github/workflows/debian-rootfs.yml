@@ -112,10 +112,12 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: "执行RootFS构建"
+    - name: "🔧 执行RootFS构建"
       id: build_rootfs
       timeout-minutes: 120
       run: |
+        echo "🚀 开始构建 ${{ matrix.distro }} RootFS..."
+        
         DISTRO="${{ matrix.distro }}"
         KERNEL_VER="${{ needs.setup.outputs.kernel_version }}"
         
@@ -123,12 +125,13 @@ jobs:
         for script in build-rootfs.sh debian-rootfs_build.sh build.sh; do
           if [ -f "$script" ]; then
             BUILD_SCRIPT="$script"
+            echo "📄 使用构建脚本: $BUILD_SCRIPT"
             break
           fi
         done
         
         if [ -z "$BUILD_SCRIPT" ]; then
-          echo "错误：未找到构建脚本！"
+          echo "❌ 错误：未找到构建脚本！"
           exit 1
         fi
         
@@ -136,9 +139,13 @@ jobs:
         
         BUILD_ARGS=("$DISTRO" "$KERNEL_VER")
         if [[ "${{ github.event.inputs.use_china_mirror }}" == "true" ]]; then
-          BUILD_ARGS+=("true")
+          BUILD_ARGS+=("--china-mirror")
+          echo "🌏 使用中国源镜像"
+        else
+          echo "🌐 使用默认镜像源"
         fi
         
+        echo "📦 开始执行构建脚本..."
         sudo "./$BUILD_SCRIPT" "${BUILD_ARGS[@]}"
         
         # 查找生成的镜像文件
@@ -167,7 +174,7 @@ jobs:
           exit 1
         fi
     
-    - name: "上传构建产物"
+    - name: "📤 上传构建产物"
       uses: actions/upload-artifact@v4
       with:
         name: ${{ matrix.distro }}-${{ needs.setup.outputs.kernel_version }}

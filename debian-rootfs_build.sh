@@ -43,15 +43,25 @@ check_dependencies() {
 
 validate_arguments() {
     [[ $# -ge 2 ]] || {
-        echo "用法: $0 <变体> <内核版本> [use_china_mirror]"
-        echo "示例: $0 server 6.18 true"
+        echo "用法: $0 <变体> <内核版本> [--china-mirror]"
+        echo "示例: $0 server 6.18 --china-mirror"
         exit 1
     }
     [[ $(id -u) -eq 0 ]] || log_error "❌ 需要root权限"
 }
 
 parse_arguments() {
-    local distro_arg=$1 kernel_version=$2 use_china_mirror="${3:-false}"
+    local distro_arg=$1 kernel_version=$2 use_china_mirror="false"
+    
+    shift 2
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --china-mirror) use_china_mirror="true" ;;
+            *) log_error "❌ 未知参数: $1" ;;
+        esac
+        shift
+    done
+    
     IFS='-' read -r distro_type distro_variant <<< "$distro_arg"
     
     case "$distro_type" in
