@@ -1,265 +1,148 @@
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-# 颜色定义
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-NC='\033[0m' # No Color
+# ======================== 配置部分 ========================
+readonly IMAGE_SIZE="6G"
+readonly FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
+readonly ROOT_PASSWORD="1234"
+readonly HOSTNAME="xiaomi-raphael"
 
-# 配置变量
-IMAGE_SIZE="6G"
-FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
-
-# 设置脚本参数数量
-SCRIPT_ARG_COUNT=$#
-
-# 检查参数
-if [ $SCRIPT_ARG_COUNT -lt 2 ]; then
-    echo -e "${RED}错误: 参数数量不足，期望 2 个参数${NC}"
-    echo -e "${YELLOW}用法: $0 <发行版类型-变体> <内核版本>${NC}"
-    echo -e "${YELLOW}示例: $0 ubuntu-server 6.18${NC}"
-    exit 1
-fi
-
-# 检查root权限
-if [ "$(id -u)" -ne 0 ]; then
-    echo -e "${RED}错误: 需要root权限运行此脚本${NC}"
-    exit 1
-fi
-
-# 确保使用bash运行脚本
-if [ -z "$BASH_VERSION" ]; then
-    echo -e "${RED}❌ 错误: 请使用bash运行此脚本${NC}"
-    exit 1
-fi
-
-echo -e "${BLUE}"
-echo "=========================================="
-echo "开始构建 $1 发行版，内核版本 $2"
-echo "=========================================="
-echo -e "${NC}"
-echo -e "${CYAN}参数检查: distro=$1, kernel=$2${NC}"
-
-# 解析发行版信息
-distro_type=$(echo "$1" | cut -d'-' -f1)
-distro_variant=$(echo "$1" | cut -d'-' -f2)
-
-# 根据发行版类型设置默认版本
-if [ "$distro_type" = "ubuntu" ]; then
-    distro_version="noble"   # Ubuntu 24.04 (noble)
-else
-    echo "错误: 不支持的发行版类型: $distro_type"
-    exit 1
-fi
-
-echo -e "${CYAN}解析发行版信息:${NC}"
-echo -e "  ${GREEN}类型:${NC} $distro_type"
-echo -e "  ${GREEN}变体:${NC} $distro_variant"
-echo -e "  ${GREEN}版本:${NC} $distro_version (默认)"
-echo -e "  ${GREEN}内核:${NC} $2"
-
-# 检查必需的内核包
-echo -e "${CYAN}检查内核包文件...${NC}"
-# 使用兼容的shell语法检查包文件
-found_packages=0
-missing_packages=""
-
-# 检查每个包文件（使用通配符匹配）
-for pkg in linux-xiaomi-raphael firmware-xiaomi-raphael alsa-xiaomi-raphael; do
-    if ls ${pkg}*.deb 1> /dev/null 2>&1; then
-        echo -e "  ${GREEN}找到:${NC} ${pkg}*.deb"
-        found_packages=$((found_packages + 1))
-    else
-        missing_packages="${pkg}*.deb $missing_packages"
-        echo -e "  ${RED}未找到:${NC} ${pkg}*.deb"
-    fi
-done
-
-if [ $found_packages -lt 3 ]; then
-    echo -e "${RED}错误: 缺少必需的内核包: $missing_packages${NC}"
-    echo -e "${YELLOW}请确保在工作流中正确下载了内核包${NC}"
-    echo -e "${YELLOW}当前目录文件列表:${NC}"
-    ls -la *.deb 2>/dev/null || echo -e "  ${RED}没有找到 .deb 文件${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}所有必需的内核包已就绪 ($found_packages/3)${NC}"
-
-# 清理旧的rootfs和镜像文件
-echo "清理旧的rootfs和镜像文件..."
-if [ -d "rootdir" ]; then
-    # 尝试优雅卸载
-    for mountpoint in sys proc dev/pts dev; do
-        if mountpoint -q "rootdir/$mountpoint"; then
-            umount "rootdir/$mountpoint" || echo "警告: 无法卸载 rootdir/$mountpoint"
-        fi
-    done
-    if mountpoint -q "rootdir"; then
-        umount "rootdir" || echo "警告: 无法卸载 rootdir"
-    fi
-    rm -rf rootdir
-    echo "旧目录已清理"
-fi
-
-if [ -f "rootfs.img" ]; then
-    rm -f rootfs.img
-    echo "旧镜像文件已清理"
-fi
-
-# Create and mount image file
-echo "📁 创建IMG镜像文件..."
-truncate -s $IMAGE_SIZE rootfs.img
-mkfs.ext4 rootfs.img
-mkdir -p rootdir
-mount -o loop rootfs.img rootdir
-echo "✅ 6GB镜像文件创建并挂载完成"
-
-# Bootstrap the rootfs
-echo "🌱 开始引导系统 (debootstrap)..."
-echo "📥 下载: $distro_type $distro_version"
-echo "🔗 使用镜像源: $mirror"
-
-# Set mirror based on distribution type
- if [ "$distro_type" = "debian" ]; then
-     mirror="http://deb.debian.org/debian/"
- elif [ "$distro_type" = "ubuntu" ]; then
-     mirror="http://ports.ubuntu.com/ubuntu-ports/"
- fi
-
-echo "🔗 使用镜像源: $mirror"
-
-echo "执行命令: sudo debootstrap --arch=arm64 $distro_version rootdir $mirror"
-if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
-    echo "✅ 系统引导完成"
-else
-    echo "❌ debootstrap 失败"
-    echo "💡 请检查网络连接和镜像源可用性"
-    exit 1
-fi
-
-# Mount proc, sys, dev
-echo "挂载虚拟文件系统..."
-mount --bind /dev rootdir/dev
-mount --bind /dev/pts rootdir/dev/pts
-mount -t proc proc rootdir/proc
-mount -t sysfs sys rootdir/sys
-
-echo "虚拟文件系统挂载完成"
-
-# Update package list
-echo "🔄 更新软件包列表..."
-if chroot rootdir apt update; then
-    echo "✅ 软件包列表更新完成"
-else
-    echo "❌ 软件包列表更新失败"
-    exit 1
-fi
-
-# ======================== 关键修改1：补充服务器版最小包 + WiFi组件 ========================
-echo "📦 安装核心基础包"
-base_packages=(
-    # 系统核心
+# 核心包列表
+readonly BASE_PACKAGES=(
     systemd udev dbus bash-completion net-tools
-    # 网络基础（强制DHCP+WiFi）
     systemd-resolved wpasupplicant iw iproute2 sudo
-    # SSH依赖
-    openssh-server openssh-client chrony ubuntu-server
-    # 基础工具
+    openssh-server openssh-client chrony
     vim wget curl iputils-ping
-    # WiFi配置工具
-    network-manager wireless-regdb 
-    # 音频/硬件兼容
-    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools
+    network-manager wireless-regdb
+    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools ca-certificates
 )
 
-echo "执行命令: chroot rootdir apt install -qq -y ${base_packages[*]}"
-if chroot rootdir apt install -qq -y "${base_packages[@]}"; then
-    echo "✅ 核心基础包安装完成"
-else
-    echo "❌ 核心基础包安装失败"
-    exit 1
-fi
-# ======================================================================================
+readonly KERNEL_PACKAGES=(
+    linux-xiaomi-raphael
+    firmware-xiaomi-raphael
+    alsa-xiaomi-raphael
+)
 
-# 使用passwd命令修改root密码为1234
-echo "设置Root密码..."
-# Ubuntu构建不使用--stdin参数
-chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
-if [ $? -eq 0 ]; then
-    echo "✅ Root密码设置完成: root/1234"
-else
-    echo "❌ Root密码设置失败"
-    exit 1
-fi
+# ======================== 函数定义 ========================
 
-# 配置SSH (仅服务器环境)
-if [[ "$distro_variant" == *"desktop"* ]]; then
-    echo "🎨 桌面环境检测: 跳过SSH配置"
-else
-    echo "🖥️  服务器环境检测: 开始配置SSH"
+log_info() {
+    echo "$1"
+}
+
+log_error() {
+    echo "$1" >&2
+    exit 1
+}
+
+check_dependencies() {
+    local deps=(debootstrap mkfs.ext4 mount truncate 7z tune2fs)
+    for dep in "${deps[@]}"; do
+        command -v "$dep" &>/dev/null || log_error "❌ 必需的命令 '$dep' 未找到"
+    done
+}
+
+validate_arguments() {
+    [[ $# -ge 2 ]] || {
+        echo "用法: $0 <变体> <内核版本> [--china-mirror]"
+        echo "示例: $0 server 6.18 --china-mirror"
+        exit 1
+    }
+    [[ $(id -u) -eq 0 ]] || log_error "❌ 需要root权限"
+}
+
+parse_arguments() {
+    local distro_arg=$1 kernel_version=$2 use_china_mirror="false"
     
-    # ======================== 关键修改2：优化SSH配置 ========================
-    echo "🔧 配置SSH服务..."
-    # 备份原配置
-    chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-    # 清空原有配置，写入最小化可靠配置
-    # 配置SSH权限
-    echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
-    echo "PubkeyAuthentication yes" >> rootdir/etc/ssh/sshd_config
-    echo "PasswordAuthentication yes" >> rootdir/etc/ssh/sshd_config
-    # 启用并设置SSH开机自启
-    chroot rootdir systemctl enable ssh
+    shift 2
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --china-mirror) use_china_mirror="true" ;;
+            *) log_error "❌ 未知参数: $1" ;;
+        esac
+        shift
+    done
     
-    echo "✅ SSH配置完成: 监听所有IP，允许root密码登录"
-    # ======================================================================
-fi
+    IFS='-' read -r distro_type distro_variant <<< "$distro_arg"
+    
+    case "$distro_type" in
+        ubuntu)
+            distro_version="noble"
+            mirror="http://ports.ubuntu.com/ubuntu-ports/"
+            ;;
+        *) log_error "不支持的发行版类型: $distro_type，仅支持 ubuntu" ;;
+    esac
+    
+    export DISTRO_TYPE="$distro_type"
+    export DISTRO_VARIANT="$distro_variant"
+    export DISTRO_VERSION="$distro_version"
+    export KERNEL_VERSION="$kernel_version"
+    export USE_CHINA_MIRROR="$use_china_mirror"
+    export MIRROR="$mirror"
+    
+    log_info "参数解析完成: $distro_type-$distro_variant, 内核: $kernel_version"
+}
 
-# Install device-specific packages
-echo "📱 安装设备特定包..."
-echo "📦 复制内核包到 chroot 环境..."
+check_kernel_packages() {
+    for pkg in "${KERNEL_PACKAGES[@]}"; do
+        if ! compgen -G "${pkg}*.deb" > /dev/null; then
+            log_error "❌ 缺少内核包: ${pkg}*.deb"
+        fi
+    done
+}
 
-# Copy kernel packages to chroot environment
-echo "📦 复制内核包到 chroot 环境..."
-cp linux-xiaomi-raphael*.deb rootdir/tmp/
-cp firmware-xiaomi-raphael*.deb rootdir/tmp/
-cp alsa-xiaomi-raphael*.deb rootdir/tmp/
-echo "✅ 内核包复制完成"
+cleanup_environment() {
+    log_info "清理环境..."
+    
+    if [[ -d "rootdir" ]]; then
+        mount | grep "rootdir" | awk '{print $3}' | xargs -r umount -l 2>/dev/null || true
+        rm -rf rootdir
+    fi
+    
+    rm -f rootfs.img 2>/dev/null || true
+}
 
-# Install custom kernel packages
-echo "🔧 安装定制内核包..."
-if chroot rootdir dpkg -i /tmp/linux-xiaomi-raphael.deb; then
-    echo "✅ linux-xiaomi-raphael 安装完成"
-else
-    echo "❌ linux-xiaomi-raphael 安装失败"
-    exit 1
-fi
+create_and_mount_image() {
+    log_info "📁 创建IMG镜像文件..."
+    truncate -s "$IMAGE_SIZE" rootfs.img
+    mkfs.ext4 rootfs.img
+    mkdir -p rootdir
+    mount -o loop rootfs.img rootdir
+}
 
-if chroot rootdir dpkg -i /tmp/firmware-xiaomi-raphael.deb; then
-    echo "✅ firmware-xiaomi-raphael 安装完成"
-else
-    echo "❌ firmware-xiaomi-raphael 安装失败"
-    exit 1
-fi
+bootstrap_system() {
+    log_info "🌱 引导系统: $DISTRO_TYPE $DISTRO_VERSION"
+    debootstrap --arch=arm64 "$DISTRO_VERSION" rootdir "$MIRROR" || \
+        log_error "❌ debootstrap 失败"
+}
 
-if chroot rootdir dpkg -i /tmp/alsa-xiaomi-raphael.deb; then
-    echo "✅ alsa-xiaomi-raphael 安装完成"
-else
-    echo "❌ alsa-xiaomi-raphael 安装失败"
-    exit 1
-fi
+mount_virtual_fs() {
+    log_info "🔌 挂载虚拟文件系统..."
+    mount --bind /dev rootdir/dev
+    mount --bind /dev/pts rootdir/dev/pts
+    mount -t proc proc rootdir/proc
+    mount -t sysfs sys rootdir/sys
+}
 
-echo "✅ 所有设备特定包安装完成"
+configure_system() {
+    log_info "⚙️ 配置系统..."
+    
+    echo 'LC_ALL=C.UTF-8' > rootdir/etc/environment
+    echo 'LANG=C.UTF-8' >> rootdir/etc/environment
+    
+    echo "root:$ROOT_PASSWORD" | chroot rootdir chpasswd || log_error "❌ 设置密码失败"
+    
+    echo "$HOSTNAME" > rootdir/etc/hostname
+    echo -e "127.0.0.1\tlocalhost\n127.0.1.1\t$HOSTNAME" > rootdir/etc/hosts
+    
+    echo -e "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1\nPARTLABEL=cache /boot vfat umask=0077,nofail 0 1" | tee rootdir/etc/fstab
+}
 
-
-# ======================== 关键修改3：全网卡强制DHCP配置 ========================
-echo "🌐 配置所有网络接口强制DHCP..."
-mkdir -p rootdir/etc/systemd/network/
-cat > rootdir/etc/systemd/network/10-autodhcp.network << EOF
+configure_network() {
+    log_info "🌐 配置网络..."
+    
+    mkdir -p rootdir/etc/systemd/network/
+    cat > rootdir/etc/systemd/network/10-autodhcp.network << 'EOF'
 [Match]
-# 匹配所有可能的网卡命名模式
 Name=eth* en* wl* wlp* wlan* eno* ens* enp* enx* enP*
 
 [Network]
@@ -273,147 +156,187 @@ UseMTU=true
 UseDNS=true
 UseHostname=false
 EOF
-# 4. 禁用传统的network.service（如果存在）
-chroot rootdir systemctl disable networking.service 2>/dev/null || true
-
-# 5. 启用systemd-networkd
-chroot rootdir systemctl enable systemd-networkd
-chroot rootdir systemctl enable systemd-resolved
-
-echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
-# ==============================================================================
-
-chroot rootdir update-initramfs -c -k all
-
-# Create fstab
-echo "📋 创建文件系统表..."
-echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
-PARTLABEL=cache /boot vfat umask=0077,nofail 0 1" | tee rootdir/etc/fstab
-
-# 配置主机名
-echo "设置主机名: xiaomi-raphael"
-echo "xiaomi-raphael" > rootdir/etc/hostname
-cat > rootdir/etc/hosts << 'EOF'
-127.0.0.1   localhost
-::1         localhost
-127.0.1.1   xiaomi-raphael
-EOF
-
-echo "✅ 主机名配置完成"
-
-# Install desktop environment for desktop variants
-if [ "$distro_variant" = "desktop" ]; then
-    echo "🖥️ 安装桌面环境..."
-    # 已在之前执行过apt update，无需重复执行
     
-    if [ "$distro_type" = "ubuntu" ]; then
-        echo "🎨 安装Ubuntu桌面环境..."
-        echo "执行命令: chroot rootdir apt install -qq -y ubuntu-desktop"
-if chroot rootdir apt install -qq -y ubuntu-desktop; then
-    echo "✅ Ubuntu桌面环境安装完成"
+    chroot rootdir systemctl disable networking.service 2>/dev/null || true
+    
+    chroot rootdir systemctl enable systemd-networkd
+}
+
+configure_ssh() {
+    [[ "$DISTRO_VARIANT" == *"desktop"* ]] && {
+        return 0
+    }
+    
+    log_info "🖥️ 配置SSH..."
+    
+    chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+    
+    cat > rootdir/etc/ssh/sshd_config << 'EOF'
+ListenAddress 0.0.0.0
+PermitRootLogin yes
+PubkeyAuthentication yes
+PasswordAuthentication yes
+EOF
+    
+    chroot rootdir systemctl enable ssh
+}
+
+configure_china_mirror() {
+    [[ "$USE_CHINA_MIRROR" != "true" ]] && return 0
+    
+    log_info "🇨🇳 配置中国源..."
+    
+    if [[ -f rootdir/etc/apt/sources.list ]]; then
+        cp rootdir/etc/apt/sources.list rootdir/etc/apt/sources.list.bak
+    fi
+    
+    cat > rootdir/etc/apt/sources.list << 'EOF'
+deb http://mirrors.ustc.edu.cn/ubuntu-ports/ noble main restricted universe multiverse
+deb http://mirrors.ustc.edu.cn/ubuntu-ports/ noble-updates main restricted universe multiverse
+deb http://mirrors.ustc.edu.cn/ubuntu-ports/ noble-backports main restricted universe multiverse
+deb http://security.ubuntu.com/ubuntu-ports/ noble-security main restricted universe multiverse
+EOF
+}
+
+install_packages() {
+    log_info "🔄 更新软件包列表..."
+    chroot rootdir apt update || log_error "❌ 更新包列表失败"
+    
+    log_info "📦 安装基础包..."
+    chroot rootdir apt install -y --no-install-recommends "${BASE_PACKAGES[@]}" || \
+        log_error "❌ 安装基础包失败"
+    
+    chroot rootdir systemctl enable chrony
+    chroot rootdir systemctl start chrony
+}
+
+install_kernel() {
+    log_info "🔧 安装内核包..."
+    
+    log_info "📦 复制内核包到 chroot 环境..."
+    for pkg in "${KERNEL_PACKAGES[@]}"; do
+        cp "${pkg}"*.deb rootdir/tmp/
+    done
+    log_info "✅ 内核包复制完成"
+    
+    log_info "🔧 安装定制内核包..."
+    for pkg in "${KERNEL_PACKAGES[@]}"; do
+        if chroot rootdir dpkg -i "/tmp/${pkg}.deb"; then
+            log_info "✅ $pkg 安装完成"
+        else
+            log_error "❌ $pkg 安装失败"
+        fi
+    done
+    
+    chroot rootdir update-initramfs -c -k all
+}
+
+install_desktop() {
+    [[ "$DISTRO_VARIANT" != "desktop" ]] && return 0
+    
+    log_info "🖥️ 安装桌面环境..."
+    chroot rootdir apt install -y ubuntu-desktop || log_error "❌ 安装桌面失败"
+    
     mkdir -p rootdir/var/lib/gdm
     touch rootdir/var/lib/gdm/run-initial-setup
-    echo "✅ GDM初始配置完成"
-else
-    echo "❌ Ubuntu桌面环境安装失败"
-    exit 1
-fi
-    fi
     
-    # 配置系统默认启动图形界面
-    echo "🔧 配置系统默认启动图形界面..."
-    if chroot rootdir systemctl set-default graphical.target; then
-        echo "✅ 已设置默认启动目标为 graphical.target"
-        # 添加调试信息：检查当前默认目标
-        current_target=$(chroot rootdir systemctl get-default)
-        echo "🔍 当前默认启动目标: $current_target"
+    chroot rootdir systemctl set-default graphical.target
+}
+
+generate_boot_image() {
+    [[ "$DISTRO_VARIANT" != "server" ]] && return 0
+    
+    log_info "🖼️ 生成boot镜像..."
+    local boot_img="xiaomi-k20pro-boot.img"
+    
+    wget -q --timeout=30 \
+         https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img || {
+        log_info "⚠️ boot镜像下载失败，跳过"
+        return 0
+    }
+    
+    [[ ! -d "rootdir/boot" ]] && {
+        log_info "⚠️ boot目录不存在，跳过"
+        return 0
+    }
+    
+    mkdir -p boot_tmp
+    if mount -o loop "$boot_img" boot_tmp 2>/dev/null; then
+        [[ -d "rootdir/boot/dtbs/qcom" ]] && {
+            mkdir -p boot_tmp/dtbs/
+            cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/
+        }
+        
+        local config_file=$(ls rootdir/boot/config-* 2>/dev/null | head -1)
+        [[ -f "$config_file" ]] && cp "$config_file" boot_tmp/
+        
+        local initrd_file=$(ls rootdir/boot/initrd.img-* 2>/dev/null | head -1)
+        [[ -f "$initrd_file" ]] && cp "$initrd_file" boot_tmp/initramfs
+        
+        local vmlinuz_file=$(ls rootdir/boot/vmlinuz-* 2>/dev/null | head -1)
+        [[ -f "$vmlinuz_file" ]] && cp "$vmlinuz_file" boot_tmp/linux.efi
+        
+        umount boot_tmp 2>/dev/null || true
+        rm -rf boot_tmp
+        log_info "✅ boot镜像生成完成"
     else
-        echo "❌ 设置默认启动目标失败"
-        exit 1
+        log_info "⚠️ boot镜像挂载失败，跳过"
     fi
+}
+
+cleanup_and_package() {
+    log_info "🧹 清理系统..."
+    chroot rootdir apt clean all
     
-    # 启用显示管理器服务
-    if [ "$distro_type" = "ubuntu" ]; then
-        echo "✅ GDM显示管理器已自动配置"
-    fi
+    log_info "🔓 卸载文件系统..."
+    for mountpoint in sys proc dev/pts dev; do
+        mountpoint -q "rootdir/$mountpoint" && umount -l "rootdir/$mountpoint" 2>/dev/null || true
+    done
+    mountpoint -q "rootdir" && umount "rootdir" 2>/dev/null || true
+    rm -rf rootdir
     
+    log_info "🔧 调整文件系统UUID..."
+    tune2fs -U "$FILESYSTEM_UUID" rootfs.img 2>/dev/null || true
     
-    # 图形系统状态检查
-    echo "🔍 图形系统状态检查..."
-    echo "📋 图形服务状态检查:"
-    if chroot rootdir systemctl is-enabled gdm.service || chroot rootdir systemctl is-enabled gdm3.service; then
-        echo "   ✅ GDM服务已启用"
-    else
-        echo "   ❌ GDM服务未启用"
-    fi
-    if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
-        echo "   ✅ DBus服务已启用"
-    else
-        echo "   ❌ DBus服务未启用"
-    fi
+    local output_file="${DISTRO_TYPE}-${DISTRO_VARIANT}-kernel-${KERNEL_VERSION}.7z"
+    log_info "🗜️ 创建压缩包: $output_file"
     
-    echo "📋 GNOME会话配置检查:"
-    if chroot rootdir dpkg -l | grep -q gnome-session; then
-        echo "   ✅ GNOME会话管理器已安装"
-    else
-        echo "   ❌ GNOME会话管理器未安装"
-    fi
+    7z a "${output_file}" rootfs.img || \
+        log_error "❌ 压缩包创建失败"
     
-    echo "📋 系统启动目标检查:"
-    current_target=$(chroot rootdir systemctl get-default)
-    echo "   当前默认启动目标: $current_target"
-    if [ "$current_target" = "graphical.target" ]; then
-        echo "   ✅ 系统将以图形模式启动"
-    else
-        echo "   ❌ 系统将不以图形模式启动"
-    fi
+    echo "🎉 构建完成: $output_file"
+}
+
+# ======================== 主流程 ========================
+main() {
+    local start_time=$(date +%s)
     
-    echo "✅ 桌面环境和图形系统配置完成"
-fi
+    validate_arguments "$@"
+    parse_arguments "$@"
+    check_dependencies
+    check_kernel_packages
+    cleanup_environment
+    
+    create_and_mount_image
+    bootstrap_system
+    mount_virtual_fs
+    
+    install_packages
+    install_kernel
+    configure_system
+    configure_network
+    configure_ssh
+    
+    install_desktop
+    
+    configure_china_mirror
+    
+    generate_boot_image
+    
+    cleanup_and_package
+    
+    local end_time=$(date +%s)
+    log_info "⏱️ 总用时: $((end_time - start_time))秒"
+}
 
-# 清理
-echo "🧹 清理系统..."
-chroot rootdir apt clean
-chroot rootdir rm -rf /var/lib/apt/lists/*
-
-echo "✅ 系统清理完成"
-
-# Unmount filesystems
-echo "🔓 卸载虚拟文件系统..."
-# 优雅卸载，避免强制卸载
-for mountpoint in sys proc dev/pts dev; do
-    if mountpoint -q "rootdir/$mountpoint"; then
-        umount "rootdir/$mountpoint" || echo "⚠️  无法卸载 rootdir/$mountpoint"
-    fi
-done
-
-echo "🔓 卸载rootfs.img..."
-if mountpoint -q "rootdir"; then
-    umount "rootdir" || echo "⚠️  无法卸载 rootdir"
-fi
-
-echo "🧹 清理rootdir目录..."
-rm -rf rootdir
-echo "✅ 虚拟文件系统卸载和目录清理完成"
-
-echo "🔧 调整文件系统UUID..."
-tune2fs -U $FILESYSTEM_UUID rootfs.img
-echo "✅ 文件系统UUID调整完成"
-
-echo "检查目录下文件..."
-ls
-
-
-# Create 7z archive
-echo "🗜️ 创建压缩包..."
-output_file="raphael-${1}-kernel-$2.7z"
-echo "输出文件: $output_file"
-if 7z a "${output_file}" rootfs.img; then
-    echo "✅ 压缩包创建成功: ${output_file}"
-    echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
-else
-    echo "❌ 压缩包创建失败"
-    exit 1
-fi
-
-echo "🎉 $distro_type-$distro_variant IMG镜像构建完成！"
+main "$@"
