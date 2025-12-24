@@ -1,11 +1,6 @@
 # Ubuntu/Debian for Xiaomi K20 Pro (Raphael)
 
-### debian-server已可使用其他发行版请自行测试
-debian-server 
-要set时间才可以更新apt
-date -s "2024-12-20 19:03:00"
-apt-get install ntpdate
-ntpdate pool.ntp.org
+### debian-server已测试可使用其他发行版请自行测试
 
 为小米 K20 Pro (代号: Raphael) 构建的 Ubuntu/Debian 系统镜像，支持在手机上运行完整的桌面Linux系统。
 
