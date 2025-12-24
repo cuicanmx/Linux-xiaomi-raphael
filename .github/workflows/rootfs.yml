@@ -54,6 +54,11 @@ jobs:
           p7zip-full \
           curl
         echo "✅ 工具安装完成"
+        docker rmi -f $(docker images -q) 2>/dev/null || true
+        [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
+        sudo swapoff -a
+        sudo rm -f /swapfile /mnt/swapfile
 
     - name: "📦 获取内核版本"
       id: kernel_version
