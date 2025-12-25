@@ -356,6 +356,31 @@ else
 fi
     fi
     
+    # 安装中文字体和语言包
+    echo "🔤 安装中文字体和语言支持..."
+    chroot rootdir apt install -y \
+        fonts-arphic-uming \
+        fonts-arphic-ukai \
+        fonts-noto-cjk-extra \
+        language-pack-gnome-zh-hans \
+        language-pack-gnome-zh-hans-base \
+        language-pack-zh-hans \
+        language-pack-zh-hans-base \
+        gnome-user-docs-zh-hans \
+        libopencc-data \
+        libmarisa0 \
+        libopencc1.1 \
+        libpinyin-data \
+        libpinyin15 \
+        ibus-libpinyin \
+        ibus-table-wubi \
+        libreoffice-help-common \
+        libreoffice-l10n-zh-cn \
+        libreoffice-help-zh-cn \
+        thunderbird-locale-zh-cn \
+        thunderbird-locale-zh-hans 2>/dev/null || echo "⚠️ 部分中文包安装失败，将继续..."
+    echo "✅ 中文字体和语言包安装完成"
+    
     # 配置用户和自动登录
     echo "👤 配置用户账户和自动登录..."
     chroot rootdir useradd -m -s /bin/bash luser
@@ -450,6 +475,8 @@ CONF
     
     echo "✅ 桌面环境和图形系统配置完成"
 fi
+
+rm rootdir/lib/firmware/reg*
 
 # Unmount filesystems
 echo "🔓 卸载虚拟文件系统..."
