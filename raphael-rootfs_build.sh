@@ -1,7 +1,7 @@
 set -e
 
 # 配置变量
-IMAGE_SIZE="3G"
+IMAGE_SIZE="8G"
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 
 # 设置脚本参数数量
