@@ -204,9 +204,28 @@ jobs:
         
         # 创建发布目录
         RELEASE_DIR="./release-assets"
+        LARGE_DIR="./large-assets"
         mkdir -p "$RELEASE_DIR"
-        # 查找并移动所有.7z和.img文件 - 递归查找所有子目录并正确分组条件
-        find ./artifacts -type f -depth \( -name "*.7z" -o -name "*.img" \) -exec mv {} "$RELEASE_DIR/" \;
+        mkdir -p "$LARGE_DIR"
+        
+        # GitHub Release 文件大小限制 (2GB)
+        MAX_SIZE=$((2 * 1024 * 1024 * 1024))
+        LARGE_FILES=()
+        
+        # 查找并移动所有.7z和.img文件
+        find ./artifacts -type f \( -name "*.7z" -o -name "*.img" \) -exec mv {} "$RELEASE_DIR/" \;
+        
+        # 检查超大文件并移至单独目录
+        for file in "$RELEASE_DIR"/*; do
+          if [ -f "$file" ]; then
+            SIZE=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
+            if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+              echo "⚠️  文件过大，跳过上传到Release: $(basename "$file") ($(($SIZE / 1024 / 1024 / 1024))GB)"
+              mv "$file" "$LARGE_DIR/"
+              LARGE_FILES+=("$(basename "$file")")
+            fi
+          fi
+        done
         
         # 生成文件列表
         echo "### 📦 包含的镜像文件" > "$RELEASE_DIR/filelist.md"
@@ -216,23 +235,37 @@ jobs:
         for file in "$RELEASE_DIR"/*; do
           if [ -f "$file" ]; then
             SIZE=$(du -h "$file" | cut -f1)
+            SIZE_KB=$(du -k "$file" | cut -f1)
             NAME=$(basename "$file")
             echo "- **$NAME** ($SIZE)" >> "$RELEASE_DIR/filelist.md"
-            TOTAL_SIZE=$((TOTAL_SIZE + $(du -k "$file" | cut -f1)))
+            TOTAL_SIZE=$((TOTAL_SIZE + SIZE_KB))
           fi
         done
+        
+        # 添加超大文件说明
+        if [ ${#LARGE_FILES[@]} -gt 0 ]; then
+          echo "" >> "$RELEASE_DIR/filelist.md"
+          echo "---" >> "$RELEASE_DIR/filelist.md"
+          echo "### ⚠️ 超大文件 (需通过其他方式获取)" >> "$RELEASE_DIR/filelist.md"
+          for fname in "${LARGE_FILES[@]}"; do
+            SIZE=$(du -h "$LARGE_DIR/$fname" | cut -f1)
+            echo "- **$fname** ($SIZE) - 请从 Actions Artifacts 下载" >> "$RELEASE_DIR/filelist.md"
+          done
+        fi
         
         # 计算总大小
         TOTAL_SIZE_MB=$((TOTAL_SIZE / 1024))
         echo "" >> "$RELEASE_DIR/filelist.md"
-        echo "**总计**: $TOTAL_SIZE_MB MB" >> "$RELEASE_DIR/filelist.md"
+        echo "**Release内总计**: $TOTAL_SIZE_MB MB" >> "$RELEASE_DIR/filelist.md"
         
         # 统计文件数量
         FILE_COUNT=$(ls -1 "$RELEASE_DIR"/* 2>/dev/null | wc -l)
         
         echo "file_count=$FILE_COUNT" >> $GITHUB_OUTPUT
         echo "total_size_mb=$TOTAL_SIZE_MB" >> $GITHUB_OUTPUT
-        # 输出文件列表内容到变量 - 使用GitHub Actions多行输出语法
+        echo "large_files=$(IFS=,; echo "${LARGE_FILES[*]}")" >> $GITHUB_OUTPUT
+        
+        # 输出文件列表内容到变量
         if [ -f "$RELEASE_DIR/filelist.md" ]; then
           EOF=$(dd if=/dev/urandom bs=15 count=1 status=none | base64)
           echo "filelist_text<<$EOF" >> $GITHUB_OUTPUT
@@ -240,8 +273,12 @@ jobs:
           echo "$EOF" >> $GITHUB_OUTPUT
         fi
         
-        echo "✅ 找到 $FILE_COUNT 个镜像文件，总计约 ${TOTAL_SIZE_MB}MB"
+        echo "✅ 找到 $FILE_COUNT 个文件 (Release内)，${#LARGE_FILES[@]} 个超大文件"
         ls -lh "$RELEASE_DIR/"
+        if [ ${#LARGE_FILES[@]} -gt 0 ]; then
+          echo "超大文件已移至 $LARGE_DIR:"
+          ls -lh "$LARGE_DIR/"
+        fi
 
     - name: "🏷️ 生成版本标签"
       id: generate_tag

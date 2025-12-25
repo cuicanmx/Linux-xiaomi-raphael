@@ -432,11 +432,11 @@ echo "✅ 文件系统UUID调整完成"
 echo "检查目录下文件..."
 ls 
 
-# Create 7z archive
-echo "🗜️ 创建压缩包..."
+# Create 7z archive with maximum compression
+echo "🗜️ 创建压缩包 (最大压缩)..."
 output_file="raphael-${1}-kernel-$2.7z"
 echo "输出文件: $output_file"
-if 7z a "${output_file}" rootfs.img; then
+if 7z a -mx=9 -mfb=258 -md=256k -ms=on "${output_file}" rootfs.img; then
     echo "✅ 压缩包创建成功: ${output_file}"
     echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
 else
