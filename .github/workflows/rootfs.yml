@@ -7,6 +7,15 @@ on:
         description: '内核版本 (对应Release标签，如 6.18)'
         required: true
         default: '6.18'
+      build_type:
+        description: '构建类型选择'
+        required: true
+        type: choice
+        options:
+          - all
+          - server-only
+          - desktop-only
+        default: 'all'
       skip_release:
         description: '跳过创建GitHub Release'
         required: false
@@ -18,7 +27,6 @@ on:
         type: boolean
         default: false
 
-# 删除 concurrency 配置，因为它不再需要
 # 全局环境变量
 env:
   DEFAULT_KERNEL: '6.18'
@@ -27,18 +35,19 @@ jobs:
   build-rootfs:
     name: "🏗️ 构建 - ${{ matrix.distro }}"
     runs-on: ubuntu-24.04-arm
-    # 为APT包启用缓存，显著加快后续构建速度
     env:
       APT_CACHE_DIR: /opt/apt-cache
     strategy:
-      # 定义要构建的所有发行版变体
       matrix:
         distro: ${{ 
             github.event.inputs.test_mode == 'true' 
-            && fromJSON('["debian-server"]') 
+            && fromJSON('["debian-server"]')
+            || github.event.inputs.build_type == 'server-only'
+            && fromJSON('["debian-server", "ubuntu-server"]')
+            || github.event.inputs.build_type == 'desktop-only'
+            && fromJSON('["debian-desktop", "ubuntu-desktop"]')
             || fromJSON('["debian-server", "debian-desktop", "ubuntu-server", "ubuntu-desktop"]')
             }}
-      # 防止一个变体构建失败导致整个任务失败
       fail-fast: false
 
     steps:
@@ -303,18 +312,28 @@ jobs:
           ## 📋 构建信息
           - **内核版本**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
           - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-          - **包含变体**: ${{ github.event.inputs.test_mode == 'true' && 'Debian Server (测试模式)' || 'Debian Server/Desktop, Ubuntu Server/Desktop' }}
+          - **构建类型**: ${{ github.event.inputs.build_type || 'all' }}
+          - **包含变体**: ${{ 
+              github.event.inputs.test_mode == 'true' && 'Debian Server (测试模式)' ||
+              github.event.inputs.build_type == 'server-only' && 'Debian Server, Ubuntu Server' ||
+              github.event.inputs.build_type == 'desktop-only' && 'Debian Desktop, Ubuntu Desktop' ||
+              'Debian Server/Desktop, Ubuntu Server/Desktop'
+            }}
           - **构建时间**: ${{ github.event.created_at }}
           - **总大小**: ${{ steps.prepare_release.outputs.total_size_mb }} MB
           
           ${{ github.event.inputs.test_mode == 'true' && '> ⚠️ 测试模式：仅构建了Debian Server变体' || '' }}
           
           ## ⚠️ 重要提示
-          ### 默认凭据
+          ### 默认凭据 (服务器版)
           - **用户名**: `root`
           - **密码**: `1234` (首次登录后请立即修改！)
-          - **普通用户**: `user`
-          - **用户密码**: `user`
+          
+          ### 默认凭据 (桌面版)
+          - **用户名**: `luser`
+          - **密码**: `luser`
+          - **自动登录**: 已启用
+          - **桌面环境**: GNOME + LightDM
           
           ### 安全建议
           1. 首次登录后立即修改默认密码

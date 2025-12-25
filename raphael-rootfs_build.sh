@@ -356,6 +356,36 @@ else
 fi
     fi
     
+    # 配置用户和自动登录
+    echo "👤 配置用户账户和自动登录..."
+    chroot rootdir useradd -m -s /bin/bash luser
+    echo "luser:luser" | chroot rootdir chpasswd
+    chroot rootdir usermod -aG sudo luser
+    echo "✅ 用户 luser 创建完成"
+    
+    # 配置 LightDM 自动登录
+    echo "🔧 配置 LightDM 自动登录..."
+    chroot rootdir mkdir -p /etc/lightdm/lightdm.conf.d
+    cat > rootdir/etc/lightdm/lightdm.conf.d/50-autologin.conf << CONF
+[Seat:*]
+autologin-user=luser
+autologin-user-timeout=0
+user-session=${DESKTOP}
+greeter-session=lightdm-gtk-greeter
+CONF
+    echo "✅ LightDM 自动登录配置完成"
+    
+    # 启用显示服务和网络管理
+    echo "🔧 启用显示和网络服务..."
+    if [ "$distro_type" = "debian" ]; then
+        chroot rootdir systemctl enable lightdm || echo "⚠️  LightDM 启用失败"
+        chroot rootdir systemctl enable NetworkManager || echo "⚠️  NetworkManager 启用失败"
+    elif [ "$distro_type" = "ubuntu" ]; then
+        chroot rootdir systemctl enable lightdm || echo "⚠️  LightDM 启用失败"
+        chroot rootdir systemctl enable NetworkManager || echo "⚠️  NetworkManager 启用失败"
+    fi
+    echo "✅ 服务启用完成"
+    
     # 配置系统默认启动图形界面
     echo "🔧 配置系统默认启动图形界面..."
     if chroot rootdir systemctl set-default graphical.target; then
