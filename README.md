@@ -72,9 +72,11 @@ echo 1 | sudo tee /sys/class/graphics/fb0/blank
 ### 贡献者
 
 特别感谢以下项目的贡献：
-- [@GengWei1997](https://github.com/GengWei1997) - 原项目
-- [@Pc1598](https://github.com/Pc1598) - 提供内核源码
+- [@GengWei1997](https://github.com/GengWei1997) - 原raphael适配项目
+- [@map220v](https://github.com/map220v/ubuntu-xiaomi-nabu) - 原项目
+- [@Pc1598](https://github.com/Pc1598) - sm8150-mainline-raphael内核维护
 - [Aospa-raphael-unofficial/linux](https://github.com/Aospa-raphael-unofficial/linux) - 内核项目
+- [sm8150-mainline/linux](https://gitlab.com/sm8150-mainline/linux) - 内核项目
 
 ## ⚠️ 免责声明
 
