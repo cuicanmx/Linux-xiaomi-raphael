@@ -163,7 +163,7 @@ base_packages=(
     # 基础工具
     sudo vim wget curl iputils-ping
     # WiFi配置工具
-    network-manager wireless-regdb 
+    network-manager 
     # 音频/硬件兼容
     alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools
 )

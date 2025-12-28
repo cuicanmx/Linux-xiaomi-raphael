@@ -12,6 +12,8 @@ jobs:
   build:
     name: "构建内核 v${{ github.event.inputs.kernel_version || '6.18' }}"
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
 
     steps:
       - name: "📥 检出代码"
