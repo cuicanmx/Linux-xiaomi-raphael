@@ -37,6 +37,9 @@ jobs:
     runs-on: ubuntu-24.04-arm
     env:
       APT_CACHE_DIR: /opt/apt-cache
+    permissions:
+      contents: read
+      packages: read
     strategy:
       matrix:
         distro: ${{ 
@@ -194,6 +197,8 @@ jobs:
     name: "🚀 发布 Release"
     needs: build-rootfs
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
     # 触发条件：手动触发且不跳过发布，并且构建成功
     if: always()
 
