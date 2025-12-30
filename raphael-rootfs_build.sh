@@ -1,7 +1,38 @@
 set -e
 
-# 配置变量
-IMAGE_SIZE="8G"
+# 解析发行版信息
+distro_type=$(echo "$1" | cut -d'-' -f1)
+distro_variant=$(echo "$1" | cut -d'-' -f2)
+
+# 根据发行版类型设置默认版本
+if [ "$distro_type" = "debian" ]; then
+    distro_version="trixie"  # Debian 13 (trixie)
+elif [ "$distro_type" = "ubuntu" ]; then
+    distro_version="noble"   # Ubuntu 24.04 (noble)
+else
+    echo "错误: 不支持的发行版类型: $distro_type"
+    exit 1
+fi
+
+echo "解析发行版信息:"
+echo "  类型: $distro_type"
+echo "  变体: $distro_variant"
+echo "  版本: $distro_version (默认)"
+echo "  内核: $2"
+
+# 根据变体设置镜像大小
+if [ "$distro_variant" = "server" ]; then
+    IMAGE_SIZE="2G"
+    echo "  镜像大小: 2G (Server版)"
+elif [ "$distro_variant" = "desktop" ]; then
+    IMAGE_SIZE="8G"
+    echo "  镜像大小: 8G (Desktop版)"
+else
+    echo "错误: 不支持的变体类型: $distro_variant"
+    echo "支持的变体: server, desktop"
+    exit 1
+fi
+
 FILESYSTEM_UUID="ee8d3593-59b1-480e-a3b6-4fefb17ee7d8"
 
 # 设置脚本参数数量
@@ -155,17 +186,11 @@ fi
 echo "📦 安装核心基础包"
 base_packages=(
     # 系统核心
-    systemd udev dbus bash-completion 
-    # 网络基础（强制DHCP+WiFi）
-    systemd-resolved wpasupplicant iw iproute2 sudo
-    # SSH依赖
-    openssh-server openssh-client chrony 
+	bash-completion chrony initramfs-tools
     # 基础工具
-    sudo vim wget curl iputils-ping
-    # WiFi配置工具
-    network-manager 
-    # 音频/硬件兼容
-    alsa-ucm-conf alsa-utils initramfs-tools u-boot-tools
+    sudo vim wget curl openssh-server network-manager alsa-ucm-conf
+    # Xiaomi设备特定
+    rmtfs protection-domain-mapper tqftpserv
 )
 
 echo "执行命令: chroot rootdir apt install -qq -y ${base_packages[*]}"
@@ -175,58 +200,14 @@ else
     echo "❌ 核心基础包安装失败"
     exit 1
 fi
-# ======================================================================================
 
-# 使用passwd命令修改root密码为1234
-echo "设置Root密码..."
-# Debian构建使用--stdin参数，Ubuntu构建不使用
-if [ "$distro_type" = "debian" ]; then
-    # 在chroot环境中使用passwd命令，通过管道自动输入密码
-    chroot rootdir bash -c "echo '1234' | passwd --stdin root"
-    if [ $? -eq 0 ]; then
-        echo "✅ Root密码设置完成: root/1234"
-    else
-        # 如果--stdin参数不可用，尝试另一种方法
-        echo "⚠️  passwd --stdin不可用，尝试替代方法..."
-        chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
-        if [ $? -eq 0 ]; then
-            echo "✅ Root密码设置完成: root/1234"
-        else
-            echo "❌ Root密码设置失败"
-            exit 1
-        fi
-    fi
+# 修复pd-mapper服务
+echo "🔧 修复pd-mapper服务配置..."
+if [ -f "rootdir/lib/systemd/system/pd-mapper.service" ]; then
+    sed -i '/ConditionKernelVersion/d' rootdir/lib/systemd/system/pd-mapper.service
+    echo "✅ pd-mapper服务配置已修复"
 else
-    # Ubuntu构建不使用--stdin参数
-    chroot rootdir bash -c "echo -e '1234\n1234' | passwd root"
-    if [ $? -eq 0 ]; then
-        echo "✅ Root密码设置完成: root/1234"
-    else
-        echo "❌ Root密码设置失败"
-        exit 1
-    fi
-fi
-
-# 配置SSH (仅服务器环境)
-if [[ "$distro_variant" == *"desktop"* ]]; then
-    echo "🎨 桌面环境检测: 跳过SSH配置"
-else
-    echo "🖥️  服务器环境检测: 开始配置SSH"
-    
-    # ======================== 关键修改2：优化SSH配置 ========================
-    echo "🔧 配置SSH服务..."
-    # 备份原配置
-    chroot rootdir cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
-    # 清空原有配置，写入最小化可靠配置
-    # 配置SSH权限
-    echo "PermitRootLogin yes" >> rootdir/etc/ssh/sshd_config
-    echo "PubkeyAuthentication yes" >> rootdir/etc/ssh/sshd_config
-    echo "PasswordAuthentication yes" >> rootdir/etc/ssh/sshd_config
-    # 启用并设置SSH开机自启
-    chroot rootdir systemctl enable ssh
-    
-    echo "✅ SSH配置完成: 监听所有IP，允许root密码登录"
-    # ======================================================================
+    echo "⚠️  未找到pd-mapper.service文件"
 fi
 
 # Install device-specific packages
@@ -265,49 +246,22 @@ fi
 
 echo "✅ 所有设备特定包安装完成"
 
-# ======================== 关键修改3：全网卡强制DHCP配置 ========================
-echo "🌐 配置所有网络接口强制DHCP..."
-mkdir -p rootdir/etc/systemd/network/
-cat > rootdir/etc/systemd/network/10-autodhcp.network << EOF
-[Match]
-# 匹配所有可能的网卡命名模式
-Name=eth* en* wl* wlp* wlan* eno* ens* enp* enx* enP*
-
-[Network]
-DHCP=yes
-LLDP=yes
-EmitLLDP=nearest-bridge
-IPv6AcceptRA=yes
-
-[DHCP]
-UseMTU=true
-UseDNS=true
-UseHostname=false
-EOF
-# 4. 禁用传统的network.service（如果存在）
-chroot rootdir systemctl disable networking.service 2>/dev/null || true
-
-# 5. 启用systemd-networkd
-chroot rootdir systemctl enable systemd-networkd
-chroot rootdir systemctl enable systemd-resolved
-
-echo "✅ 全网卡强制DHCP配置完成：所有接口自动获取IP，DNS动态管理"
-# ==============================================================================
+# 生成 initramfs
 chroot rootdir update-initramfs -c -k all
-# Generated boot - 仅在构建debian-server时执行
-if [ "$distro_type" = "debian" ] && [ "$distro_variant" = "server" ]; then
-    mkdir -p boot_tmp
-    wget https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
-    mount -o loop xiaomi-k20pro-boot.img boot_tmp
 
-    cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/
-    cp rootdir/boot/config-* boot_tmp/
-    cp rootdir/boot/initrd.img-* boot_tmp/initramfs
-    cp rootdir/boot/vmlinuz-* boot_tmp/linux.efi
+# 生成 boot
+mkdir -p boot_tmp
+wget https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
+mount -o loop xiaomi-k20pro-boot.img boot_tmp
 
-    umount boot_tmp
-    rm -d boot_tmp
-fi
+cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/
+cp rootdir/boot/config-* boot_tmp/
+cp rootdir/boot/initrd.img-* boot_tmp/initramfs
+cp rootdir/boot/vmlinuz-* boot_tmp/linux.efi
+
+umount boot_tmp
+rm -d boot_tmp
+
 # Create fstab
 echo "📋 创建文件系统表..."
 echo "PARTLABEL=userdata / ext4 errors=remount-ro,x-systemd.growfs 0 1
@@ -329,151 +283,63 @@ echo "✅ 主机名和hosts配置完成"
 # Install desktop environment for desktop variants
 if [ "$distro_variant" = "desktop" ]; then
     echo "🖥️ 安装桌面环境..."
-    # 已在之前执行过apt update，无需重复执行
     
     if [ "$distro_type" = "debian" ]; then
         echo "🎨 安装GNOME桌面环境..."
         if chroot rootdir apt install -qq -y task-gnome-desktop; then
             echo "✅ GNOME桌面环境安装完成 (Debian)"
+            
+            # ============ 创建默认用户 ============
+            echo "👤 为Debian桌面创建默认用户..."
+            # 设置root密码
+            echo "root:root" | chroot rootdir chpasswd
+            
+            # 创建普通用户
+            chroot rootdir useradd -m -G sudo -s /bin/bash user
+            echo "user:1234" | chroot rootdir chpasswd
+            
+            # 设置自动登录
+            echo "[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=user" > rootdir/etc/gdm3/daemon.conf
+            
             mkdir -p rootdir/var/lib/gdm
             touch rootdir/var/lib/gdm/run-initial-setup
             echo "✅ GDM初始配置完成"
+            
         else
             echo "❌ GNOME桌面环境安装失败"
             exit 1
         fi
+        
     elif [ "$distro_type" = "ubuntu" ]; then
         echo "🎨 安装Ubuntu桌面环境..."
         echo "执行命令: chroot rootdir apt install -qq -y ubuntu-desktop"
-if chroot rootdir apt install -qq -y ubuntu-desktop; then
-    echo "✅ Ubuntu桌面环境安装完成"
-    mkdir -p rootdir/var/lib/gdm
-    touch rootdir/var/lib/gdm/run-initial-setup
-    echo "✅ GDM初始配置完成"
-else
-    echo "❌ Ubuntu桌面环境安装失败"
-    exit 1
-fi
+        if chroot rootdir apt install -qq -y ubuntu-desktop; then
+            echo "✅ Ubuntu桌面环境安装完成"
+			
+            # ============ 创建默认用户 ============
+            echo "👤 为Ubuntu桌面创建默认用户..."
+            # 设置root密码
+            echo "root:root" | chroot rootdir chpasswd
+            
+            # 创建普通用户
+            chroot rootdir useradd -m -G sudo -s /bin/bash user
+            echo "user:1234" | chroot rootdir chpasswd
+            
+            # 设置自动登录
+            echo "[daemon]
+AutomaticLoginEnable=true
+AutomaticLogin=user" > rootdir/etc/gdm3/daemon.conf
+			
+            mkdir -p rootdir/var/lib/gdm
+            touch rootdir/var/lib/gdm/run-initial-setup
+            echo "✅ GDM初始配置完成"
+        else
+            echo "❌ Ubuntu桌面环境安装失败"
+            exit 1
+        fi
     fi
-    
-    # 安装中文字体和语言包
-    echo "🔤 安装中文字体和语言支持..."
-    chroot rootdir apt install -y \
-        fonts-arphic-uming \
-        fonts-arphic-ukai \
-        fonts-noto-cjk-extra \
-        language-pack-gnome-zh-hans \
-        language-pack-gnome-zh-hans-base \
-        language-pack-zh-hans \
-        language-pack-zh-hans-base \
-        gnome-user-docs-zh-hans \
-        libopencc-data \
-        libmarisa0 \
-        libopencc1.1 \
-        libpinyin-data \
-        libpinyin15 \
-        ibus-libpinyin \
-        ibus-table-wubi \
-        libreoffice-help-common \
-        libreoffice-l10n-zh-cn \
-        libreoffice-help-zh-cn \
-        thunderbird-locale-zh-cn \
-        thunderbird-locale-zh-hans 2>/dev/null || echo "⚠️ 部分中文包安装失败，将继续..."
-    echo "✅ 中文字体和语言包安装完成"
-    
-    # 配置用户和自动登录
-    echo "👤 配置用户账户和自动登录..."
-    chroot rootdir useradd -m -s /bin/bash luser
-    echo "luser:luser" | chroot rootdir chpasswd
-    echo "luser ALL=(ALL) NOPASSWD: ALL" >> rootdir/etc/sudoers
-    chroot rootdir usermod -aG sudo luser
-    echo "✅ 用户 luser 创建完成"
-    
-    # 配置显示管理器自动登录
-    echo "🔧 配置显示管理器自动登录..."
-    
-    # 尝试使用 GDM3 自动登录配置
-    if [ -d rootdir/etc/gdm3 ]; then
-        cat > rootdir/etc/gdm3/daemon.conf << DAEMON
-[daemon]
-AutomaticLogin=luser
-AutomaticLoginEnable=True
-DAEMON
-        chroot rootdir systemctl enable gdm3 || echo "⚠️  GDM3 启用失败"
-    # 尝试使用 LightDM
-    elif [ -d rootdir/etc/lightdm ]; then
-        chroot rootdir mkdir -p /etc/lightdm/lightdm.conf.d
-        cat > rootdir/etc/lightdm/lightdm.conf.d/50-autologin.conf << CONF
-[Seat:*]
-autologin-user=luser
-autologin-user-timeout=0
-user-session=${DESKTOP}
-greeter-session=lightdm-gtk-greeter
-CONF
-        chroot rootdir systemctl enable lightdm || echo "⚠️  LightDM 启用失败"
-    fi
-    echo "✅ 显示管理器自动登录配置完成"
-    
-    # 启用显示服务和网络管理
-    echo "🔧 启用显示和网络服务..."
-    if [ "$distro_type" = "debian" ]; then
-        chroot rootdir systemctl enable gdm3 2>/dev/null || chroot rootdir systemctl enable gdm 2>/dev/null || echo "⚠️  GDM 启用失败"
-        chroot rootdir systemctl enable NetworkManager || echo "⚠️  NetworkManager 启用失败"
-    elif [ "$distro_type" = "ubuntu" ]; then
-        chroot rootdir systemctl enable gdm3 2>/dev/null || chroot rootdir systemctl enable gdm 2>/dev/null || echo "⚠️  GDM 启用失败"
-        chroot rootdir systemctl enable NetworkManager || echo "⚠️  NetworkManager 启用失败"
-    fi
-    echo "✅ 服务启用完成"
-    
-    # 配置系统默认启动图形界面
-    echo "🔧 配置系统默认启动图形界面..."
-    if chroot rootdir systemctl set-default graphical.target; then
-        echo "✅ 已设置默认启动目标为 graphical.target"
-        # 添加调试信息：检查当前默认目标
-        current_target=$(chroot rootdir systemctl get-default)
-        echo "🔍 当前默认启动目标: $current_target"
-    else
-        echo "❌ 设置默认启动目标失败"
-        exit 1
-    fi
-    
-    # 启用显示管理器服务
-    if [ "$distro_type" = "debian" ]; then
-        echo "✅ GDM显示管理器已自动配置"
-    fi
-    
-    
-    # 图形系统状态检查
-    echo "🔍 图形系统状态检查..."
-    echo "📋 图形服务状态检查:"
-    if chroot rootdir systemctl is-enabled gdm.service || chroot rootdir systemctl is-enabled gdm3.service; then
-        echo "   ✅ GDM服务已启用"
-    else
-        echo "   ❌ GDM服务未启用"
-    fi
-    if chroot rootdir systemctl is-enabled dbus.service >/dev/null; then
-        echo "   ✅ DBus服务已启用"
-    else
-        echo "   ❌ DBus服务未启用"
-    fi
-    
-    echo "📋 GNOME会话配置检查:"
-    if chroot rootdir dpkg -l | grep -q gnome-session; then
-        echo "   ✅ GNOME会话管理器已安装"
-    else
-        echo "   ❌ GNOME会话管理器未安装"
-    fi
-    
-    echo "📋 系统启动目标检查:"
-    current_target=$(chroot rootdir systemctl get-default)
-    echo "   当前默认启动目标: $current_target"
-    if [ "$current_target" = "graphical.target" ]; then
-        echo "   ✅ 系统将以图形模式启动"
-    else
-        echo "   ❌ 系统将不以图形模式启动"
-    fi
-    
-    echo "✅ 桌面环境和图形系统配置完成"
 fi
 
 rm rootdir/lib/firmware/reg*
