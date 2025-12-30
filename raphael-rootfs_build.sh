@@ -189,8 +189,6 @@ base_packages=(
 	bash-completion chrony initramfs-tools
     # 基础工具
     sudo vim wget curl openssh-server network-manager alsa-ucm-conf
-    # Xiaomi设备特定
-    rmtfs protection-domain-mapper tqftpserv
 )
 
 echo "执行命令: chroot rootdir apt install -qq -y ${base_packages[*]}"
@@ -198,6 +196,22 @@ if chroot rootdir apt install -qq -y "${base_packages[@]}"; then
     echo "✅ 核心基础包安装完成"
 else
     echo "❌ 核心基础包安装失败"
+    exit 1
+fi
+
+# 安装Xiaomi设备特定包
+echo "📱 安装Xiaomi设备特定包..."
+device_packages=(
+    rmtfs
+    protection-domain-mapper
+    tqftpserv
+)
+
+echo "执行命令: chroot rootdir apt install -qq -y ${device_packages[*]}"
+if chroot rootdir apt install -qq -y "${device_packages[@]}"; then
+    echo "✅ Xiaomi设备特定包安装完成"
+else
+    echo "❌ Xiaomi设备特定包安装失败"
     exit 1
 fi
 
