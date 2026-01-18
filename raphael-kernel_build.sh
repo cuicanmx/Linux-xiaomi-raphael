@@ -18,9 +18,9 @@ export OBJDUMP="llvm-objdump"
 export READELF="llvm-readelf"
 export STRIP="llvm-strip"
 
-git clone https://github.com/GengWei1997/linux.git --branch raphael-$1 --depth 1 linux
+git clone https://github.com/cuicanmx/linux.git --branch raphael-$1 --depth 1 linux
 cd linux
-wget -P arch/arm64/configs https://raw.githubusercontent.com/GengWei1997/kernel-deb/refs/heads/main/raphael.config
+wget -P arch/arm64/configs https://raw.githubusercontent.com/cuicanmx/kernel-deb/refs/heads/main/raphael.config
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 defconfig raphael.config
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1
 _kernel_version="$(make kernelrelease -s)"
