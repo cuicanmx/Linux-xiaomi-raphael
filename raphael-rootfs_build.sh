@@ -127,21 +127,35 @@ echo "📥 下载: $distro_type $distro_version"
          exit 1
      fi
  elif [ "$distro_type" = "ubuntu" ]; then
-     # 使用ubuntu-base镜像替代debootstrap
-     echo "🔗 使用ubuntu-base镜像"
-     if [ "$distro_version" = "noble" ]; then
-         ubuntu_version="24.04"
-     elif [ "$distro_version" = "jammy" ]; then
-         ubuntu_version="22.04"
-     elif [ "$distro_version" = "focal" ]; then
-         ubuntu_version="20.04"
-     else
-         echo "❌ 不支持的Ubuntu版本: $distro_version"
-         exit 1
-     fi
-     
-     wget -q --show-progress https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
+         # 使用ubuntu-base镜像替代debootstrap
+         echo "🔗 使用ubuntu-base镜像"
+         if [ "$distro_version" = "noble" ]; then
+             ubuntu_version="24.04"
+         elif [ "$distro_version" = "jammy" ]; then
+             ubuntu_version="22.04"
+         elif [ "$distro_version" = "focal" ]; then
+             ubuntu_version="20.04"
+         else
+             echo "❌ 不支持的Ubuntu版本: $distro_version"
+             exit 1
+         fi
+         
+         # 检查镜像文件是否已存在
+          if [ -f "ubuntu-base-$ubuntu_version-base-arm64.tar.gz" ]; then
+              echo "ℹ️  镜像文件已存在，跳过下载"
+          else
+              wget -q --show-progress https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
+              if [ $? -ne 0 ]; then
+                  echo "❌ 下载ubuntu-base镜像失败"
+                  exit 1
+              fi
+          fi
+      
       tar xzf ubuntu-base-$ubuntu_version-base-arm64.tar.gz -C rootdir
+      if [ $? -ne 0 ]; then
+          echo "❌ 解压ubuntu-base镜像失败"
+          exit 1
+      fi
      echo "✅ Ubuntu-base镜像解压完成"
  fi
 
