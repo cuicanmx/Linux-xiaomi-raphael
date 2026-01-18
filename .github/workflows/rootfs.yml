@@ -24,11 +24,20 @@ on:
       test_mode:
         description: '测试模式'
         required: false
-        type: boolean
-        default: false
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+        default: 'false'
       test_distro:
         description: '测试发行版 (测试模式下有效，如: debian-server, ubuntu-desktop)'
         required: false
+        type: choice
+        options:
+          - 'debian-server'
+          - 'debian-desktop'
+          - 'ubuntu-server'
+          - 'ubuntu-desktop'
         default: 'debian-server'
 
 # 全局环境变量
@@ -147,7 +156,7 @@ jobs:
         
         # 执行构建脚本
           echo "执行构建命令: sudo bash ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
-          sudo bash ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
+          sudo bash ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER" 2>&1
         
         # 检查构建结果 - 查找动态生成的压缩包
         OUTPUT_FILE="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"

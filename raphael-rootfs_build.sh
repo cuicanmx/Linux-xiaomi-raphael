@@ -144,7 +144,8 @@ echo "📥 下载: $distro_type $distro_version"
           if [ -f "ubuntu-base-$ubuntu_version-base-arm64.tar.gz" ]; then
               echo "ℹ️  镜像文件已存在，跳过下载"
           else
-              wget -q --show-progress https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
+              wget -q --show-progress https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz || \
+      wget -q --show-progress https://mirrors.tuna.tsinghua.edu.cn/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
               if [ $? -ne 0 ]; then
                   echo "❌ 下载ubuntu-base镜像失败"
                   exit 1
