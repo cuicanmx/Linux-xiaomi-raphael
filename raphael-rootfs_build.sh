@@ -144,8 +144,7 @@ echo "📥 下载: $distro_type $distro_version"
           if [ -f "ubuntu-base-$ubuntu_version-base-arm64.tar.gz" ]; then
               echo "ℹ️  镜像文件已存在，跳过下载"
           else
-              wget -q --show-progress https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz || \
-               wget -q --show-progress https://mirrors.tuna.tsinghua.edu.cn/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
+              wget -q https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
               if [ $? -ne 0 ]; then
                   echo "❌ 下载ubuntu-base镜像失败"
                   exit 1
@@ -168,6 +167,13 @@ mount -t proc proc rootdir/proc
 mount -t sysfs sys rootdir/sys
 
 echo "虚拟文件系统挂载完成"
+
+# Configure DNS for Ubuntu
+if [ "$distro_type" = "ubuntu" ]; then
+    echo "🔧 配置DNS服务器"
+    echo "nameserver 1.1.1.1" | tee rootdir/etc/resolv.conf
+    echo "nameserver 8.8.8.8" | tee -a rootdir/etc/resolv.conf
+fi
 
 # Update package list
 echo "🔄 更新软件包列表..."
@@ -324,7 +330,7 @@ chroot rootdir update-initramfs -c -k all
 # Generated boot - 仅在构建debian-server时执行
 if [ "$distro_type" = "debian" ] && [ "$distro_variant" = "server" ]; then
     mkdir -p boot_tmp
-    wget -q --show-progress https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
+    wget -q https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
     mount -o loop xiaomi-k20pro-boot.img boot_tmp
 
     cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/
