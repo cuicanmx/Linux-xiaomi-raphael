@@ -22,23 +22,10 @@ on:
         type: boolean
         default: false
       test_mode:
-        description: '测试模式'
+        description: '测试模式 (仅构建debian-server)'
         required: false
-        type: choice
-        options:
-          - 'false'
-          - 'true'
-        default: 'false'
-      test_distro:
-        description: '测试发行版 (测试模式下有效，如: debian-server, ubuntu-desktop)'
-        required: false
-        type: choice
-        options:
-          - 'debian-server'
-          - 'debian-desktop'
-          - 'ubuntu-server'
-          - 'ubuntu-desktop'
-        default: 'debian-server'
+        type: boolean
+        default: false
 
 # 全局环境变量
 env:
@@ -57,7 +44,7 @@ jobs:
       matrix:
         distro: ${{ 
             github.event.inputs.test_mode == 'true' 
-            && fromJSON(format('[{0}]', github.event.inputs.test_distro))
+            && fromJSON('["debian-server"]')
             || github.event.inputs.build_type == 'server-only'
             && fromJSON('["debian-server", "ubuntu-server"]')
             || github.event.inputs.build_type == 'desktop-only'
@@ -156,7 +143,7 @@ jobs:
         
         # 执行构建脚本
           echo "执行构建命令: sudo bash ./raphael-rootfs_build.sh $DISTRO $KERNEL_VER"
-          sudo bash ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER" 2>&1
+          sudo bash ./raphael-rootfs_build.sh "$DISTRO" "$KERNEL_VER"
         
         # 检查构建结果 - 查找动态生成的压缩包
         OUTPUT_FILE="raphael-${DISTRO}-kernel-${KERNEL_VER}.7z"
@@ -336,7 +323,7 @@ jobs:
           | 构建SHA | [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |
           | 构建类型 | ${{ github.event.inputs.build_type || 'all' }} |
           | 包含变体 | ${{ 
-              github.event.inputs.test_mode == 'true' && format('{0} (测试模式)', github.event.inputs.test_distro) ||
+              github.event.inputs.test_mode == 'true' && 'Debian Server (测试模式)' ||
               github.event.inputs.build_type == 'server-only' && 'Debian Server, Ubuntu Server' ||
               github.event.inputs.build_type == 'desktop-only' && 'Debian Desktop, Ubuntu Desktop' ||
               'Debian Server/Desktop, Ubuntu Server/Desktop'
