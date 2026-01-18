@@ -115,15 +115,15 @@ jobs:
             | 项目 | 详情 |
             |------|------|
             | 内核版本 | ${{ github.event.inputs.kernel_version || '6.18' }} |
-            | 构建时间 | ${{ github.event.created_at }} |
             | 构建方式 | GitHub Actions 自动构建 |
             
             --- 
             
             ### 📦 包含包
-            - linux-xiaomi-raphael_*.deb
-            - firmware-xiaomi-raphael_*.deb  
-            - alsa-xiaomi-raphael_*.deb
+            - linux-xiaomi-raphael.deb
+            - firmware-xiaomi-raphael.deb  
+            - alsa-xiaomi-raphael.deb
+            - install.7z
           draft: false
           prerelease: false
           files: "*.deb"

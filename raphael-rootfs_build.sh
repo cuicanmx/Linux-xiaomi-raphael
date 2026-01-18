@@ -111,27 +111,39 @@ mount -o loop rootfs.img rootdir
 echo "✅ 6GB镜像文件创建并挂载完成"
 
 # Bootstrap the rootfs
-echo "🌱 开始引导系统 (debootstrap)..."
+echo "🌱 开始引导系统..."
 echo "📥 下载: $distro_type $distro_version"
-echo "🔗 使用镜像源: $mirror"
 
 # Set mirror based on distribution type
  if [ "$distro_type" = "debian" ]; then
      mirror="http://deb.debian.org/debian/"
+     echo "🔗 使用镜像源: $mirror"
+     echo "执行命令: sudo debootstrap --arch=arm64 $distro_version rootdir $mirror"
+     if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
+         echo "✅ 系统引导完成"
+     else
+         echo "❌ debootstrap 失败"
+         echo "💡 请检查网络连接和镜像源可用性"
+         exit 1
+     fi
  elif [ "$distro_type" = "ubuntu" ]; then
-     mirror="http://ports.ubuntu.com/ubuntu-ports/"
+     # 使用ubuntu-base镜像替代debootstrap
+     echo "🔗 使用ubuntu-base镜像"
+     if [ "$distro_version" = "noble" ]; then
+         ubuntu_version="24.04"
+     elif [ "$distro_version" = "jammy" ]; then
+         ubuntu_version="22.04"
+     elif [ "$distro_version" = "focal" ]; then
+         ubuntu_version="20.04"
+     else
+         echo "❌ 不支持的Ubuntu版本: $distro_version"
+         exit 1
+     fi
+     
+     wget -q --show-progress https://cdimage.ubuntu.com/ubuntu-base/releases/$ubuntu_version/release/ubuntu-base-$ubuntu_version-base-arm64.tar.gz
+      tar xzf ubuntu-base-$ubuntu_version-base-arm64.tar.gz -C rootdir
+     echo "✅ Ubuntu-base镜像解压完成"
  fi
-
-echo "🔗 使用镜像源: $mirror"
-
-echo "执行命令: sudo debootstrap --arch=arm64 $distro_version rootdir $mirror"
-if sudo debootstrap --arch=arm64 "$distro_version" rootdir "$mirror"; then
-    echo "✅ 系统引导完成"
-else
-    echo "❌ debootstrap 失败"
-    echo "💡 请检查网络连接和镜像源可用性"
-    exit 1
-fi
 
 # Mount proc, sys, dev
 echo "挂载虚拟文件系统..."
@@ -297,7 +309,7 @@ chroot rootdir update-initramfs -c -k all
 # Generated boot - 仅在构建debian-server时执行
 if [ "$distro_type" = "debian" ] && [ "$distro_variant" = "server" ]; then
     mkdir -p boot_tmp
-    wget https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
+    wget -q --show-progress https://github.com/GengWei1997/kernel-deb/releases/download/v1.0.0/xiaomi-k20pro-boot.img
     mount -o loop xiaomi-k20pro-boot.img boot_tmp
 
     cp -r rootdir/boot/dtbs/qcom boot_tmp/dtbs/

@@ -328,7 +328,6 @@ jobs:
               github.event.inputs.build_type == 'desktop-only' && 'Debian Desktop, Ubuntu Desktop' ||
               'Debian Server/Desktop, Ubuntu Server/Desktop'
             }} |
-          | 构建时间 | ${{ github.event.created_at }} |
           | 总大小 | ${{ steps.prepare_release.outputs.total_size_mb }} MB |
           
           ${{ github.event.inputs.test_mode == 'true' && '> ⚠️ 测试模式：仅构建了Debian Server变体' || '' }}
