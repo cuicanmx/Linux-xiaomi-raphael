@@ -312,40 +312,51 @@ jobs:
         tag_name: ${{ steps.generate_tag.outputs.release_tag }}
         name: "Ubuntu/Debian for Raphael - ${{ steps.generate_tag.outputs.release_tag }}"
         body: |
-          # 🐧 Ubuntu/Debian 镜像
+          🐧 Ubuntu/Debian for Raphael
           
-          ## 📋 构建信息
-          - **内核版本**: ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }}
-          - **构建SHA**: [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }})
-          - **构建类型**: ${{ github.event.inputs.build_type || 'all' }}
-          - **包含变体**: ${{ 
+          --- 
+          
+          ### 📋 构建信息
+          | 项目 | 详情 |
+          |------|------|
+          | 内核版本 | ${{ github.event.inputs.kernel_version || env.DEFAULT_KERNEL }} |
+          | 构建SHA | [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |
+          | 构建类型 | ${{ github.event.inputs.build_type || 'all' }} |
+          | 包含变体 | ${{ 
               github.event.inputs.test_mode == 'true' && 'Debian Server (测试模式)' ||
               github.event.inputs.build_type == 'server-only' && 'Debian Server, Ubuntu Server' ||
               github.event.inputs.build_type == 'desktop-only' && 'Debian Desktop, Ubuntu Desktop' ||
               'Debian Server/Desktop, Ubuntu Server/Desktop'
-            }}
-          - **构建时间**: ${{ github.event.created_at }}
-          - **总大小**: ${{ steps.prepare_release.outputs.total_size_mb }} MB
+            }} |
+          | 构建时间 | ${{ github.event.created_at }} |
+          | 总大小 | ${{ steps.prepare_release.outputs.total_size_mb }} MB |
           
           ${{ github.event.inputs.test_mode == 'true' && '> ⚠️ 测试模式：仅构建了Debian Server变体' || '' }}
           
-          ## ⚠️ 重要提示
-          ### 默认凭据 (服务器版)
-          - **用户名**: `root`
-          - **密码**: `1234` (首次登录后请立即修改！)
+          --- 
           
-          ### 默认凭据 (桌面版)
-          - **用户名**: `luser`
-          - **密码**: `luser`
-          - **自动登录**: 已启用
-          - **桌面环境**: GNOME + LightDM
+          ### 🔐 默认凭据
           
-          ### 安全建议
+          **服务器版**
+          - 用户名: `root`
+          - 密码: `1234` (首次登录后请立即修改！)
+          
+          **桌面版**
+          - 用户名: `luser`
+          - 密码: `luser`
+          - 自动登录: 已启用
+          - 桌面环境: GNOME + LightDM
+          
+          --- 
+          
+          ### 🛡️ 安全建议
           1. 首次登录后立即修改默认密码
           2. 禁用root远程登录（可选）
           3. 配置防火墙规则
 
-          ## 📦 镜像文件
+          --- 
+          
+          ### 📦 镜像文件
           ${{ steps.prepare_release.outputs.filelist_text }}
 
         draft: false
