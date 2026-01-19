@@ -31,7 +31,6 @@ jobs:
     outputs:
       release_tag: ${{ steps.generate_tag.outputs.release_tag }}
       kernel_version: ${{ steps.kernel_version.outputs.kernel_version }}
-    if: ${{ !github.event.inputs.skip_release }}
     steps:
     - name: "📦 获取内核版本"
       id: kernel_version
@@ -49,6 +48,7 @@ jobs:
         echo "release_tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
 
     - name: "📄 提前创建GitHub Release"
+      if: ${{ !github.event.inputs.skip_release }}
       uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ steps.generate_tag.outputs.release_tag }}
@@ -98,7 +98,7 @@ jobs:
           构建中...
         draft: false
         prerelease: false
-        files: ~
+        files: ""
         generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -137,11 +137,6 @@ jobs:
           p7zip-full \
           curl
         echo "✅ 工具安装完成"
-        docker rmi -f $(docker images -q) 2>/dev/null || true
-        [[ -n "${AGENT_TOOLSDIRECTORY}" ]] && sudo rm -rf "${AGENT_TOOLSDIRECTORY}"
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android 2>/dev/null
-        sudo swapoff -a
-        sudo rm -f /swapfile /mnt/swapfile
 
     - name: "📥 下载内核包"
       id: download_kernel
