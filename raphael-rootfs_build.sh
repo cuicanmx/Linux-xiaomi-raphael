@@ -54,6 +54,11 @@ echo "  变体: $distro_variant"
 echo "  版本: $distro_version (默认)"
 echo "  内核: $2"
 
+# 生成时间戳
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+# 设置新的rootfs镜像名称格式：发行版_发行代号_时间_rootfs.img
+ROOTFS_IMG="${distro_type}_${distro_version}_${TIMESTAMP}_rootfs.img"
+
 # 检查必需的内核包
 echo "检查内核包文件..."
 # 使用兼容的shell语法检查包文件
@@ -97,17 +102,17 @@ if [ -d "rootdir" ]; then
     echo "旧目录已清理"
 fi
 
-if [ -f "rootfs.img" ]; then
-    rm -f rootfs.img
+if [ -f "${ROOTFS_IMG}" ]; then
+    rm -f "${ROOTFS_IMG}"
     echo "旧镜像文件已清理"
 fi
 
 # Create and mount image file
 echo "📁 创建IMG镜像文件..."
-truncate -s $IMAGE_SIZE rootfs.img
-mkfs.ext4 rootfs.img
+truncate -s $IMAGE_SIZE "${ROOTFS_IMG}"
+mkfs.ext4 "${ROOTFS_IMG}"
 mkdir -p rootdir
-mount -o loop rootfs.img rootdir
+mount -o loop "${ROOTFS_IMG}" rootdir
 echo "✅ 6GB镜像文件创建并挂载完成"
 
 # Bootstrap the rootfs
@@ -520,7 +525,7 @@ for mountpoint in sys proc dev/pts dev; do
     fi
 done
 
-echo "🔓 卸载rootfs.img..."
+echo "🔓 卸载${ROOTFS_IMG}..."
 if mountpoint -q "rootdir"; then
     umount "rootdir" || echo "⚠️  无法卸载 rootdir"
 fi
@@ -530,7 +535,7 @@ rm -rf rootdir
 echo "✅ 虚拟文件系统卸载和目录清理完成"
 
 echo "🔧 调整文件系统UUID..."
-tune2fs -U $FILESYSTEM_UUID rootfs.img
+tune2fs -U $FILESYSTEM_UUID "${ROOTFS_IMG}"
 echo "✅ 文件系统UUID调整完成"
 
 echo "检查目录下文件..."
@@ -540,7 +545,7 @@ ls
 echo "🗜️ 创建压缩包 (最大压缩)..."
 output_file="raphael-${1}-kernel-$2.7z"
 echo "输出文件: $output_file"
-if 7z a -mx=9 -mfb=258 -md=256k -ms=on "${output_file}" rootfs.img; then
+if 7z a "${output_file}" "${ROOTFS_IMG}"; then
     echo "✅ 压缩包创建成功: ${output_file}"
     echo "📊 文件大小: $(du -h "${output_file}" | cut -f1)"
 else

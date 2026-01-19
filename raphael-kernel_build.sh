@@ -33,9 +33,7 @@ rm -rf ../linux-xiaomi-raphael/lib
 make -j$(nproc) ARCH=arm64 CC="ccache clang" LLVM=1 INSTALL_MOD_PATH=../linux-xiaomi-raphael modules_install
 rm ../linux-xiaomi-raphael/lib/modules/**/build
 cd ..
-rm -rf linux
 
 dpkg-deb --build --root-owner-group linux-xiaomi-raphael
 dpkg-deb --build --root-owner-group firmware-xiaomi-raphael
 dpkg-deb --build --root-owner-group alsa-xiaomi-raphael
-ccache --show-stats
