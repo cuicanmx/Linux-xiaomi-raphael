@@ -116,9 +116,9 @@ jobs:
     strategy:
       matrix:
         distro: ${{ 
-            github.event.inputs.build_type == 'server-only'
+            (github.event.inputs.build_type == 'server-only')
             && fromJSON('["debian-server", "ubuntu-server"]')
-            || github.event.inputs.build_type == 'desktop-only'
+            || (github.event.inputs.build_type == 'desktop-only')
             && fromJSON('["debian-desktop", "ubuntu-desktop"]')
             || fromJSON('["debian-server", "debian-desktop", "ubuntu-server", "ubuntu-desktop"]')
             }}
@@ -206,8 +206,8 @@ jobs:
           exit 1
         fi
         
-        # 检查Boot镜像（仅Debian Server）
-        if [[ "$DISTRO" == "debian-server" && -f "xiaomi-k20pro-boot.img" ]]; then
+        # 检查Boot镜像（所有Server变体）
+        if [[ "$DISTRO" == "*-server" && -f "xiaomi-k20pro-boot.img" ]]; then
           echo "✅ 找到Boot镜像: xiaomi-k20pro-boot.img"
           echo "boot_img_exists=true" >> $GITHUB_OUTPUT
         fi
