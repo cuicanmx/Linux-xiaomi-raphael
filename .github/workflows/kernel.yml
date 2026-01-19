@@ -31,8 +31,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-ccache-kernel-${{ github.event.inputs.kernel_version || '6.18' }}-
             ${{ runner.os }}-ccache-kernel-
-          # 设置缓存大小限制，避免缓存过大
-          cache-size: 10GB
 
       - name: "🔧 设置构建环境"
         run: |
