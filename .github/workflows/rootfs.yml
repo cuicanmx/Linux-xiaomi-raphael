@@ -36,7 +36,7 @@ jobs:
     - name: "📦 获取内核版本"
       id: kernel_version
       run: |
-        KERNEL_VER='${{ github.event.inputs.kernel_version || "6.18" }}'
+        KERNEL_VER=${{ github.event.inputs.kernel_version || '6.18' }}
         echo "kernel_version=$KERNEL_VER" >> $GITHUB_OUTPUT
 
     - name: "🏷️ 生成版本标签"
@@ -98,7 +98,7 @@ jobs:
           构建中...
         draft: false
         prerelease: false
-        files: []
+        files: ~
         generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
